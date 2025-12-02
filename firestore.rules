@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================================
+    // FIREBASE FIRESTORE SECURITY RULES
+    // NWR Maintenance Portal v2
+    // ============================================================================
+    //
+    // IMPORTANT: Deploy these rules to Firebase Console
+    // Command: firebase deploy --only firestore:rules
+    //
+    // Current State: INSECURE - Anonymous authentication allows all writes
+    // Required Action: Implement proper authentication before production use
+    // ============================================================================
+
+    // Helper function: Check if user is authenticated (even anonymously)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function: Check if user owns the document (by techId/userId)
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Helper function: Validate inspection data structure
+    function isValidInspection() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['siteId', 'date', 'timestamp', 'techId']) &&
+             data.siteId is string &&
+             data.date is string &&
+             data.timestamp is string &&
+             data.techId is string;
+    }
+
+    // Root artifacts collection
+    match /artifacts/{appId} {
+      // Public data collection
+      match /public/{docId} {
+        // Allow read access to authenticated users
+        allow read: if isAuthenticated();
+
+        // Data subcollection
+        match /data/{document=**} {
+          // Allow read access to authenticated users
+          allow read: if isAuthenticated();
+        }
+
+        // Inspections subcollection
+        match /data/inspections/{inspectionId} {
+          // Allow read access to authenticated users
+          allow read: if isAuthenticated();
+
+          // Allow create if authenticated and data is valid
+          allow create: if isAuthenticated() && isValidInspection();
+
+          // Allow update/delete only if user is the owner
+          // TODO: Change to proper user authentication instead of anonymous
+          allow update, delete: if isAuthenticated() &&
+                                   isOwner(resource.data.techId);
+        }
+
+        // Maintenance logs subcollection
+        match /data/logs/{logId} {
+          // Allow read access to authenticated users
+          allow read: if isAuthenticated();
+
+          // Allow create if authenticated
+          allow create: if isAuthenticated();
+
+          // Allow update/delete only if user is the owner
+          allow update, delete: if isAuthenticated() &&
+                                   isOwner(resource.data.userId);
+        }
+      }
+    }
+
+    // ============================================================================
+    // PRODUCTION SECURITY RECOMMENDATIONS:
+    // ============================================================================
+    // 1. Replace anonymous authentication with proper user accounts
+    // 2. Implement role-based access control (admin, technician, viewer)
+    // 3. Add field-level validation for all data types
+    // 4. Implement rate limiting to prevent abuse
+    // 5. Add audit logging for all write operations
+    // 6. Restrict reads to specific user groups/roles
+    // 7. Add IP whitelisting if accessing from known locations
+    // 8. Enable Firebase App Check for additional security
+    //
+    // Example improved rule with roles:
+    // function hasRole(role) {
+    //   return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    // }
+    // allow write: if hasRole('admin') || hasRole('technician');
+    // ============================================================================
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
