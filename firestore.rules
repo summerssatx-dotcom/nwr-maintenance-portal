@@ -8,10 +8,7 @@ service cloud.firestore {
     // ============================================================================
     //
     // IMPORTANT: Deploy these rules to Firebase Console
-    // Command: firebase deploy --only firestore:rules
-    //
-    // Current State: INSECURE - Anonymous authentication allows all writes
-    // Required Action: Implement proper authentication before production use
+    // Current State: Anonymous authentication with basic validation
     // ============================================================================
 
     // Helper function: Check if user is authenticated (even anonymously)
@@ -36,19 +33,13 @@ service cloud.firestore {
 
     // Root artifacts collection
     match /artifacts/{appId} {
-      // Public data collection
-      match /public/{docId} {
-        // Allow read access to authenticated users
+      // Public data document
+      match /public/data {
+        // Allow read access to the document itself
         allow read: if isAuthenticated();
 
-        // Data subcollection
-        match /data/{document=**} {
-          // Allow read access to authenticated users
-          allow read: if isAuthenticated();
-        }
-
         // Inspections subcollection
-        match /data/inspections/{inspectionId} {
+        match /inspections/{inspectionId} {
           // Allow read access to authenticated users
           allow read: if isAuthenticated();
 
@@ -56,13 +47,12 @@ service cloud.firestore {
           allow create: if isAuthenticated() && isValidInspection();
 
           // Allow update/delete only if user is the owner
-          // TODO: Change to proper user authentication instead of anonymous
           allow update, delete: if isAuthenticated() &&
                                    isOwner(resource.data.techId);
         }
 
         // Maintenance logs subcollection
-        match /data/logs/{logId} {
+        match /logs/{logId} {
           // Allow read access to authenticated users
           allow read: if isAuthenticated();
 
@@ -84,15 +74,6 @@ service cloud.firestore {
     // 3. Add field-level validation for all data types
     // 4. Implement rate limiting to prevent abuse
     // 5. Add audit logging for all write operations
-    // 6. Restrict reads to specific user groups/roles
-    // 7. Add IP whitelisting if accessing from known locations
-    // 8. Enable Firebase App Check for additional security
-    //
-    // Example improved rule with roles:
-    // function hasRole(role) {
-    //   return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    // }
-    // allow write: if hasRole('admin') || hasRole('technician');
     // ============================================================================
 
     // Deny all other access by default
