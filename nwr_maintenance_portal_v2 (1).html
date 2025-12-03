@@ -770,7 +770,7 @@
       const [saving, setSaving] = useState(false);
       const [data, setData] = useState({});
 
-      const set = (f, v) => setData(p => ({ ...p, [f]: v }));
+      const set = useCallback((f, v) => setData(p => ({ ...p, [f]: v })), []);
       const site = SITES.find(s => s.id === data.siteId);
 
       const handleSiteChange = (id) => {
