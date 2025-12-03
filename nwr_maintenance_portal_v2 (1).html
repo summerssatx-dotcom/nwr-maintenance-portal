@@ -526,7 +526,7 @@
       </div>
     );
 
-    const Input = ({ label, field, data, set, type = 'text', unit, small, classic }) => (
+    const Input = React.memo(({ label, field, data, set, type = 'text', unit, small, classic }) => (
       <div className={classic ? 'classic-field pl-2' : ''}>
         <label className={`block text-slate-400 mb-1 ${small ? 'text-[10px]' : 'text-xs'} uppercase font-semibold`}>
           {label} {unit && <span className="text-slate-600 normal-case">({unit})</span>}
@@ -539,9 +539,9 @@
           className={`w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg focus:border-noaa-sky outline-none ${small ? 'p-2 text-xs' : 'p-2.5 text-sm'}`}
         />
       </div>
-    );
+    ));
 
-    const Textarea = ({ label, field, data, set, rows = 3 }) => (
+    const Textarea = React.memo(({ label, field, data, set, rows = 3 }) => (
       <div>
         <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
         <textarea
@@ -551,7 +551,7 @@
           className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2.5 text-sm focus:border-noaa-sky outline-none resize-none"
         />
       </div>
-    );
+    ));
 
     const Radio = ({ label, field, data, set, options }) => (
       <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
@@ -569,7 +569,7 @@
       </div>
     );
 
-    const DualInput = ({ label, dbm, vrms, data, set }) => (
+    const DualInput = React.memo(({ label, dbm, vrms, data, set }) => (
       <div>
         <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
         <div className="flex gap-2">
@@ -586,7 +586,7 @@
           </div>
         </div>
       </div>
-    );
+    ));
 
     // Main Form
     // Facility Maintenance Log (FAA 6030-1 style)
