@@ -848,9 +848,39 @@
         const pageWidth = doc.internal.pageSize.getWidth();
         let yPos = 20;
 
+        const checkSpace = (needed = 30) => {
+          if (yPos > 270 - needed) {
+            doc.addPage();
+            yPos = 20;
+          }
+        };
+
+        const addSectionHeader = (title) => {
+          checkSpace(15);
+          doc.setFontSize(12);
+          doc.setTextColor(14, 165, 233);
+          doc.text(title, 20, yPos);
+          yPos += 8;
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0);
+        };
+
+        const addField = (label, value, unit = '') => {
+          if (!value || value === '') return false;
+          checkSpace(8);
+          doc.setTextColor(100, 116, 139);
+          doc.text(label, 25, yPos);
+          doc.setTextColor(0, 0, 0);
+          const displayValue = value + (unit ? ` ${unit}` : '');
+          const lines = doc.splitTextToSize(displayValue.toString(), pageWidth - 80);
+          doc.text(lines, 80, yPos);
+          yPos += 6 * lines.length + 2;
+          return true;
+        };
+
         // Header
         doc.setFontSize(18);
-        doc.setTextColor(14, 165, 233); // noaa-sky color
+        doc.setTextColor(14, 165, 233);
         doc.text('NOAA Weather Radio Inspection Report', pageWidth / 2, yPos, { align: 'center' });
         yPos += 8;
         doc.setFontSize(11);
@@ -858,105 +888,137 @@
         doc.text('EHB-7 Compliance Inspection', pageWidth / 2, yPos, { align: 'center' });
         yPos += 15;
 
-        // Site Information
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text('Site Information', 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        const siteInfo = [
-          ['Site:', site?.name || 'N/A'],
-          ['Call Sign:', site?.call || 'N/A'],
-          ['Frequency:', site?.freq || 'N/A'],
-          ['Transmitter:', site?.tx || 'N/A'],
-          ['Date:', data.date || 'N/A'],
-          ['Technician:', data.tech || 'N/A']
-        ];
-        siteInfo.forEach(([label, value]) => {
-          doc.setTextColor(100, 116, 139);
-          doc.text(label, 25, yPos);
-          doc.setTextColor(0, 0, 0);
-          doc.text(value, 60, yPos);
-          yPos += 6;
-        });
-        yPos += 10;
+        // Site Information (always shown)
+        addSectionHeader('Site Information');
+        addField('Site:', site?.name || 'N/A');
+        addField('Call Sign:', site?.call || 'N/A');
+        addField('Frequency:', site?.freq || 'N/A');
+        addField('Transmitter:', site?.tx || 'N/A');
+        addField('Date:', data.date || 'N/A');
+        addField('Technician:', data.tech || 'N/A');
+        yPos += 5;
 
-        // Transmitter 1 Measurements
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text('Transmitter 1 Measurements', 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        
-        // Frequency measurements
-        const tx1FreqError = data.tx1_freq_error || 'N/A';
-        const tx1Modulation = data.tx1_modulation || 'N/A';
-        const tx1FwdPower = data.tx1_ext_fwd || 'N/A';
-        
-        doc.text(`Frequency Error: ${tx1FreqError} Hz`, 25, yPos);
-        yPos += 6;
-        doc.text(`Modulation: ${tx1Modulation} kHz`, 25, yPos);
-        yPos += 6;
-        doc.text(`Forward Power: ${tx1FwdPower} W`, 25, yPos);
-        yPos += 12;
-
-        // Transmitter 2 (if not Classic Armstrong)
-        if (!isClassic || txType !== 'armstrong') {
-          doc.setFontSize(12);
-          doc.setTextColor(14, 165, 233);
-          doc.text('Transmitter 2 Measurements', 20, yPos);
-          yPos += 8;
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-          
-          const tx2FreqError = data.tx2_freq_error || 'N/A';
-          const tx2Modulation = data.tx2_modulation || 'N/A';
-          const tx2FwdPower = data.tx2_ext_fwd || 'N/A';
-          
-          doc.text(`Frequency Error: ${tx2FreqError} Hz`, 25, yPos);
-          yPos += 6;
-          doc.text(`Modulation: ${tx2Modulation} kHz`, 25, yPos);
-          yPos += 6;
-          doc.text(`Forward Power: ${tx2FwdPower} W`, 25, yPos);
-          yPos += 12;
+        // Section 1: Filters Replaced
+        if (data.filters) {
+          addSectionHeader('Section 1: Filters Replaced');
+          addField('Filters:', data.filters);
+          yPos += 5;
         }
 
-        // Visual Inspection Checklist
-        if (yPos > 250) {
-          doc.addPage();
-          yPos = 20;
+        // Section 2: Visual Inspection
+        let hasSection2 = false;
+        if (data.visualComments || data.defectiveFans) {
+          addSectionHeader('Section 2: Visual Inspection');
+          hasSection2 = addField('Comments:', data.visualComments) || hasSection2;
+          hasSection2 = addField('Defective Fans:', data.defectiveFans) || hasSection2;
+          if (hasSection2) yPos += 5;
         }
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text('Visual Inspection Checklist', 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        
-        const checklist = [
-          ['Filters Replaced:', data.filters || 'N/A'],
-          ['Visual Comments:', data.visualComments || 'N/A'],
-          ['Defective Fans:', data.defectiveFans || 'None'],
-          ['AC Input TX1:', (data.ac1 || 'N/A') + ' V'],
-          ['AC Input TX2:', (data.ac2 || 'N/A') + ' V'],
-          ['Surge Protector OK:', data.surgeOk || 'N/A'],
-          ['ROAMS Battery Date:', data.roamsDate || 'N/A']
-        ];
-        
-        checklist.forEach(([label, value]) => {
-          if (yPos > 270) {
-            doc.addPage();
-            yPos = 20;
+
+        // Section 3: AC Input, Surge, ROAMS
+        let hasSection3 = false;
+        if (data.ac1 || data.ac2 || data.surgeOk || data.roamsDate || data.roamsReplaced) {
+          addSectionHeader('Section 3: AC Input, Surge, ROAMS');
+          hasSection3 = addField('AC Input TX1:', data.ac1, 'V') || hasSection3;
+          hasSection3 = addField('AC Input TX2:', data.ac2, 'V') || hasSection3;
+          hasSection3 = addField('Surge Protector OK:', data.surgeOk) || hasSection3;
+          hasSection3 = addField('ROAMS Battery Date:', data.roamsDate) || hasSection3;
+          hasSection3 = addField('ROAMS Replaced:', data.roamsReplaced) || hasSection3;
+          if (hasSection3) yPos += 5;
+        }
+
+        // Section 4-5: Power Measurements
+        const txPrefix = txType === 'nautel' ? ['txa', 'txb'] : ['tx1', 'tx2'];
+        txPrefix.forEach((tx, idx) => {
+          const txNum = idx + 1;
+          const txName = txType === 'nautel' ? (tx === 'txa' ? 'TX A' : 'TX B') : `TX ${txNum}`;
+          const powerFields = Object.keys(data).filter(k => k.startsWith(tx + '_') && data[k]);
+          if (powerFields.length > 0) {
+            addSectionHeader(`Section 4-5: ${txName} Power Measurements`);
+            powerFields.forEach(field => {
+              const label = field.replace(tx + '_', '').replace(/_/g, ' ').toUpperCase();
+              addField(label + ':', data[field]);
+            });
+            yPos += 5;
           }
-          doc.setTextColor(100, 116, 139);
-          doc.text(label, 25, yPos);
-          doc.setTextColor(0, 0, 0);
-          const lines = doc.splitTextToSize(value.toString(), pageWidth - 80);
-          doc.text(lines, 80, yPos);
-          yPos += 6 * lines.length + 2;
         });
+
+        // Section 6-7: Frequency & Modulation
+        if (data.freq_init_1 || data.freq_final_1 || data.freq_init_2 || data.freq_final_2 || data.mod_crt_1 || data.mod_meter_1 || data.mod_crt_2 || data.mod_meter_2) {
+          addSectionHeader('Section 6-7: Frequency & Modulation');
+          addField('Freq Initial TX1:', data.freq_init_1, 'MHz');
+          addField('Freq Final TX1:', data.freq_final_1, 'MHz');
+          addField('Freq Initial TX2:', data.freq_init_2, 'MHz');
+          addField('Freq Final TX2:', data.freq_final_2, 'MHz');
+          addField('Mod CRT TX1:', data.mod_crt_1);
+          addField('Mod Meter TX1:', data.mod_meter_1);
+          addField('Mod CRT TX2:', data.mod_crt_2);
+          addField('Mod Meter TX2:', data.mod_meter_2);
+          yPos += 5;
+        }
+
+        // Section 8: Audio
+        const audioFields = Object.keys(data).filter(k => k.startsWith('audio') && data[k]);
+        if (audioFields.length > 0) {
+          addSectionHeader('Section 8: Audio Input Level');
+          audioFields.forEach(field => {
+            const label = field.replace(/audio\d_/, '').replace(/_/g, ' ').toUpperCase();
+            addField(label + ':', data[field]);
+          });
+          yPos += 5;
+        }
+
+        // Section 9: Transfer
+        if (data.transfer_crs || data.transfer_acp || data.final_tx) {
+          addSectionHeader('Section 9: Transmitter Transfer');
+          addField('CRS Transfer:', data.transfer_crs);
+          addField('ACP Transfer:', data.transfer_acp);
+          addField('Final TX:', data.final_tx);
+          yPos += 5;
+        }
+
+        // Section 10: Generator
+        if (data.gen_fluids || data.gen_air || data.gen_problems || data.gen_transfer || data.gen_ran || data.gen_hours) {
+          addSectionHeader('Section 10: Backup Generator');
+          addField('Fluids Normal:', data.gen_fluids);
+          addField('Air Filter Clean:', data.gen_air);
+          addField('Problems Found:', data.gen_problems);
+          addField('Transfer Switch OK:', data.gen_transfer);
+          addField('Generator Ran:', data.gen_ran);
+          addField('Hour Meter:', data.gen_hours);
+          yPos += 5;
+        }
+
+        // Section 11: Signal Strength
+        const sigFields = Object.keys(data).filter(k => k.startsWith('sig_') && data[k]);
+        if (sigFields.length > 0 || data.notes) {
+          addSectionHeader('Section 11: Signal Strength');
+          addField('Antenna Type:', data.sig_ant);
+          addField('Height:', data.sig_height);
+          addField('Orientation:', data.sig_orient);
+          [0, 90, 180, 270].forEach(deg => {
+            const degFields = Object.keys(data).filter(k => k.startsWith(`sig_${deg}_`) && data[k]);
+            if (degFields.length > 0) {
+              yPos += 3;
+              doc.setTextColor(0, 0, 0);
+              doc.setFontSize(9);
+              doc.text(`${deg}°:`, 25, yPos);
+              yPos += 5;
+              doc.setFontSize(10);
+              addField('  uV/m:', data[`sig_${deg}_uvm`]);
+              addField('  dBuV/m:', data[`sig_${deg}_db`]);
+              addField('  Distance:', data[`sig_${deg}_dist`], 'mi');
+              addField('  Latitude:', data[`sig_${deg}_lat`]);
+              addField('  Longitude:', data[`sig_${deg}_lng`]);
+            }
+          });
+          yPos += 5;
+        }
+
+        // Notes
+        if (data.notes) {
+          addSectionHeader('Notes');
+          addField('', data.notes);
+        }
 
         // Footer
         yPos = doc.internal.pageSize.getHeight() - 15;
