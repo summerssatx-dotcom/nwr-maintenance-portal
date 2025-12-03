@@ -526,32 +526,49 @@
       </div>
     );
 
-    const Input = React.memo(({ label, field, data, set, type = 'text', unit, small, classic }) => (
-      <div className={classic ? 'classic-field pl-2' : ''}>
-        <label className={`block text-slate-400 mb-1 ${small ? 'text-[10px]' : 'text-xs'} uppercase font-semibold`}>
-          {label} {unit && <span className="text-slate-600 normal-case">({unit})</span>}
-          {classic && <span className="text-amber-500 ml-1">*</span>}
-        </label>
-        <input
-          type={type}
-          value={data[field] || ''}
-          onChange={e => set(field, e.target.value)}
-          className={`w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg focus:border-noaa-sky outline-none ${small ? 'p-2 text-xs' : 'p-2.5 text-sm'}`}
-        />
-      </div>
-    ));
+    const Input = React.memo(
+      ({ label, field, data, set, type = 'text', unit, small, classic }) => (
+        <div className={classic ? 'classic-field pl-2' : ''}>
+          <label className={`block text-slate-400 mb-1 ${small ? 'text-[10px]' : 'text-xs'} uppercase font-semibold`}>
+            {label} {unit && <span className="text-slate-600 normal-case">({unit})</span>}
+            {classic && <span className="text-amber-500 ml-1">*</span>}
+          </label>
+          <input
+            type={type}
+            value={data[field] || ''}
+            onChange={e => set(field, e.target.value)}
+            className={`w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg focus:border-noaa-sky outline-none ${small ? 'p-2 text-xs' : 'p-2.5 text-sm'}`}
+          />
+        </div>
+      ),
+      (prev, next) =>
+        prev.label === next.label &&
+        prev.field === next.field &&
+        prev.data[prev.field] === next.data[next.field] &&
+        prev.type === next.type &&
+        prev.unit === next.unit &&
+        prev.small === next.small &&
+        prev.classic === next.classic
+    );
 
-    const Textarea = React.memo(({ label, field, data, set, rows = 3 }) => (
-      <div>
-        <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
-        <textarea
-          value={data[field] || ''}
-          onChange={e => set(field, e.target.value)}
-          rows={rows}
-          className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2.5 text-sm focus:border-noaa-sky outline-none resize-none"
-        />
-      </div>
-    ));
+    const Textarea = React.memo(
+      ({ label, field, data, set, rows = 3 }) => (
+        <div>
+          <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
+          <textarea
+            value={data[field] || ''}
+            onChange={e => set(field, e.target.value)}
+            rows={rows}
+            className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2.5 text-sm focus:border-noaa-sky outline-none resize-none"
+          />
+        </div>
+      ),
+      (prev, next) =>
+        prev.label === next.label &&
+        prev.field === next.field &&
+        prev.data[prev.field] === next.data[next.field] &&
+        prev.rows === next.rows
+    );
 
     const Radio = ({ label, field, data, set, options }) => (
       <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
@@ -569,24 +586,32 @@
       </div>
     );
 
-    const DualInput = React.memo(({ label, dbm, vrms, data, set }) => (
-      <div>
-        <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <input type="number" value={data[dbm] || ''} onChange={e => set(dbm, e.target.value)} placeholder="dBm"
-              className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
-            <span className="text-[10px] text-slate-500">dBm</span>
-          </div>
-          <span className="text-slate-500 self-center text-xs">or</span>
-          <div className="flex-1">
-            <input type="number" value={data[vrms] || ''} onChange={e => set(vrms, e.target.value)} placeholder="Vrms"
-              className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
-            <span className="text-[10px] text-slate-500">Vrms</span>
+    const DualInput = React.memo(
+      ({ label, dbm, vrms, data, set }) => (
+        <div>
+          <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <input type="number" value={data[dbm] || ''} onChange={e => set(dbm, e.target.value)} placeholder="dBm"
+                className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
+              <span className="text-[10px] text-slate-500">dBm</span>
+            </div>
+            <span className="text-slate-500 self-center text-xs">or</span>
+            <div className="flex-1">
+              <input type="number" value={data[vrms] || ''} onChange={e => set(vrms, e.target.value)} placeholder="Vrms"
+                className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
+              <span className="text-[10px] text-slate-500">Vrms</span>
+            </div>
           </div>
         </div>
-      </div>
-    ));
+      ),
+      (prev, next) =>
+        prev.label === next.label &&
+        prev.dbm === next.dbm &&
+        prev.vrms === next.vrms &&
+        prev.data[prev.dbm] === next.data[next.dbm] &&
+        prev.data[prev.vrms] === next.data[next.vrms]
+    );
 
     // Main Form
     // Facility Maintenance Log (FAA 6030-1 style)
