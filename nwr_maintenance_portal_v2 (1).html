@@ -37,6 +37,11 @@
     .dark-popup .leaflet-popup-content { margin: 12px; }
     .leaflet-container { background: #1e293b; }
     .map-tiles-dark { filter: brightness(0.7) contrast(1.1) saturate(0.9); }
+    /* Make date picker icon more visible on dark background */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1) brightness(1.2);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -1016,7 +1021,7 @@
           </div>
           <Radio label="Surge Protector OK?" field="surgeOk" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
           <div className="grid grid-cols-2 gap-4">
-            <Input label="ROAMS Battery Date" field="roamsDate" data={data} set={set} />
+            <Input label="ROAMS Battery Date" field="roamsDate" data={data} set={set} type="date" />
             <Radio label="ROAMS Replaced?" field="roamsReplaced" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
           </div>
         </div>
