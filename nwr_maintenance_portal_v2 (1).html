@@ -1754,6 +1754,7 @@
 
       useEffect(() => {
         localStorage.setItem('nwr_calendar_events', JSON.stringify(events));
+        window.dispatchEvent(new Event('calendarUpdate'));
       }, [events]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -1991,10 +1992,29 @@
 
     // Dashboard
     const Dashboard = ({ setTab }) => {
-      const [events] = useState(() => {
+      const [events, setEvents] = useState(() => {
         const saved = localStorage.getItem('nwr_calendar_events');
         return saved ? JSON.parse(saved) : [];
       });
+
+      // Listen for changes to localStorage (when calendar events are updated)
+      useEffect(() => {
+        const handleStorageChange = () => {
+          const saved = localStorage.getItem('nwr_calendar_events');
+          setEvents(saved ? JSON.parse(saved) : []);
+        };
+
+        // Listen for storage events from other tabs/windows
+        window.addEventListener('storage', handleStorageChange);
+
+        // Also listen for custom event from same tab
+        window.addEventListener('calendarUpdate', handleStorageChange);
+
+        return () => {
+          window.removeEventListener('storage', handleStorageChange);
+          window.removeEventListener('calendarUpdate', handleStorageChange);
+        };
+      }, []);
 
       const today = new Date().toISOString().split('T')[0];
       const scheduled = events.filter(e => !e.completed && e.date >= today).length;
