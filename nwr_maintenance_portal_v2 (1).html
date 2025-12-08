@@ -2509,25 +2509,63 @@
     const SitesList = () => {
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
+      const [siteStatuses, setSiteStatuses] = useState(() => {
+        const saved = localStorage.getItem('nwr_site_statuses');
+        if (saved) return JSON.parse(saved);
+        // Initialize all sites as 'online'
+        const initial = {};
+        SITES.forEach(site => initial[site.id] = 'online');
+        return initial;
+      });
+
+      useEffect(() => {
+        localStorage.setItem('nwr_site_statuses', JSON.stringify(siteStatuses));
+      }, [siteStatuses]);
+
+      const updateSiteStatus = (siteId, newStatus) => {
+        setSiteStatuses(prev => ({ ...prev, [siteId]: newStatus }));
+      };
+
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
       const color = (t) => t.includes('Crown') ? 'teal' : t.includes('Armstrong') ? 'blue' : 'purple';
-      
+
       const toggleExpand = (id) => {
         setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
       };
 
+      const statusConfig = {
+        'online': { label: '● Online', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', dotColor: 'bg-emerald-500' },
+        'degraded': { label: '● Degraded', color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', dotColor: 'bg-amber-500' },
+        'offline': { label: '● Not Operational', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', dotColor: 'bg-red-500' }
+      };
+
+      const onlineSites = Object.values(siteStatuses).filter(s => s === 'online').length;
+      const degradedSites = Object.values(siteStatuses).filter(s => s === 'degraded').length;
+      const offlineSites = Object.values(siteStatuses).filter(s => s === 'offline').length;
+
       return (
         <div className="space-y-6 animate-in">
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <h2 className="text-lg font-bold text-white flex items-center gap-2"><Icon name="MapPin" className="w-5 h-5 text-noaa-sky" /> Site Directory</h2>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                <div className="relative">
+              {onlineSites > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                  <span className="text-emerald-400 text-xs font-medium">{onlineSites} Online</span>
                 </div>
-                <span className="text-emerald-400 text-xs font-medium">All Sites Operational</span>
-              </div>
+              )}
+              {degradedSites > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="text-amber-400 text-xs font-medium">{degradedSites} Degraded</span>
+                </div>
+              )}
+              {offlineSites > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-red-400 text-xs font-medium">{offlineSites} Offline</span>
+                </div>
+              )}
             </div>
             <div className="relative w-full sm:w-72">
               <Icon name="Search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -2553,15 +2591,18 @@
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(s => (
+            {filtered.map(s => {
+              const status = siteStatuses[s.id] || 'online';
+              const statusInfo = statusConfig[status];
+              return (
               <div key={s.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600/50 transition-all">
                 <div className="flex justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-white text-lg">{s.name}</h3>
                       <div className="relative">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                        <div className={`w-2 h-2 rounded-full ${statusInfo.dotColor}`} />
+                        {status === 'online' && <div className={`absolute inset-0 w-2 h-2 rounded-full ${statusInfo.dotColor} animate-ping opacity-50`} />}
                       </div>
                     </div>
                     <p className="text-noaa-sky font-mono text-sm">{s.call}</p>
@@ -2579,9 +2620,17 @@
                     <span className="text-slate-500">Coordinates</span>
                     <span className="text-slate-300 font-mono text-xs">{s.lat}, {s.lng}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500">Status</span>
-                    <span className="text-emerald-400 text-xs font-medium">● Online</span>
+                    <select
+                      value={status}
+                      onChange={(e) => updateSiteStatus(s.id, e.target.value)}
+                      className={`${statusInfo.color} text-xs font-medium bg-slate-900 border border-slate-700 rounded px-2 py-1 cursor-pointer hover:border-slate-600 outline-none`}
+                    >
+                      <option value="online">● Online</option>
+                      <option value="degraded">● Degraded</option>
+                      <option value="offline">● Not Operational</option>
+                    </select>
                   </div>
                 </div>
                 
@@ -2662,7 +2711,8 @@
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       );
