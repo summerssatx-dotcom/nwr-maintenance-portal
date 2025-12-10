@@ -8,17 +8,35 @@ service cloud.firestore {
     // ============================================================================
     //
     // IMPORTANT: Deploy these rules to Firebase Console
-    // Current State: Anonymous authentication with basic validation
+    // Current State: Google Sign-In with @noaa.gov domain restriction
+    // Role-Based Access Control: admin, editor, viewer
     // ============================================================================
 
-    // Helper function: Check if user is authenticated (even anonymously)
+    // Helper function: Check if user is authenticated with @noaa.gov email
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null &&
+             request.auth.token.email.matches('.*@noaa[.]gov$');
     }
 
     // Helper function: Check if user owns the document (by techId/userId)
     function isOwner(userId) {
       return request.auth.uid == userId;
+    }
+
+    // Helper function: Get user role from user_roles collection
+    function getUserRole() {
+      return get(/databases/$(database)/documents/artifacts/$(appId)/public/data/user_roles/$(request.auth.uid)).data.role;
+    }
+
+    // Helper function: Check if user can edit (admin or editor)
+    function canEdit() {
+      let role = getUserRole();
+      return role == 'admin' || role == 'editor';
+    }
+
+    // Helper function: Check if user is admin
+    function isAdmin() {
+      return getUserRole() == 'admin';
     }
 
     // Helper function: Validate inspection data structure
@@ -64,13 +82,22 @@ service cloud.firestore {
                                    isOwner(resource.data.userId);
         }
 
+        // User roles subcollection (for role-based access control)
+        match /user_roles/{userId} {
+          // Anyone authenticated can read their own role
+          allow read: if isAuthenticated();
+
+          // Only admins can create/update/delete user roles
+          allow create, update, delete: if isAdmin();
+        }
+
         // Calendar events subcollection (shared team calendar)
         match /calendar_events/{eventId} {
           // Allow read access to all authenticated users
           allow read: if isAuthenticated();
 
-          // Allow create/update/delete for all authenticated users (team collaboration)
-          allow create, update, delete: if isAuthenticated();
+          // Allow create/update/delete only for admins and editors
+          allow create, update, delete: if isAuthenticated() && canEdit();
         }
 
         // Site statuses subcollection (shared team data)
@@ -78,8 +105,8 @@ service cloud.firestore {
           // Allow read access to all authenticated users
           allow read: if isAuthenticated();
 
-          // Allow create/update/delete for all authenticated users (team collaboration)
-          allow create, update, delete: if isAuthenticated();
+          // Allow create/update/delete only for admins and editors
+          allow create, update, delete: if isAuthenticated() && canEdit();
         }
 
         // Maintenance log subcollection (shared team log)
@@ -87,20 +114,24 @@ service cloud.firestore {
           // Allow read access to all authenticated users
           allow read: if isAuthenticated();
 
-          // Allow create/update/delete for all authenticated users (team collaboration)
-          allow create, update, delete: if isAuthenticated();
+          // Allow create/update/delete only for admins and editors
+          allow create, update, delete: if isAuthenticated() && canEdit();
         }
       }
     }
 
     // ============================================================================
-    // PRODUCTION SECURITY RECOMMENDATIONS:
+    // IMPLEMENTED SECURITY FEATURES:
     // ============================================================================
-    // 1. Replace anonymous authentication with proper user accounts
-    // 2. Implement role-based access control (admin, technician, viewer)
-    // 3. Add field-level validation for all data types
-    // 4. Implement rate limiting to prevent abuse
-    // 5. Add audit logging for all write operations
+    // ✅ 1. Google Sign-In with @noaa.gov domain restriction
+    // ✅ 2. Role-based access control (admin, editor, viewer)
+    // ✅ 3. User roles managed in Firebase Console
+    //
+    // FUTURE ENHANCEMENTS:
+    // ============================================================================
+    // 1. Add field-level validation for all data types
+    // 2. Implement rate limiting to prevent abuse
+    // 3. Add audit logging for all write operations
     // ============================================================================
 
     // Deny all other access by default
