@@ -12,10 +12,9 @@ service cloud.firestore {
     // Role-Based Access Control: admin, editor, viewer
     // ============================================================================
 
-    // Helper function: Check if user is authenticated with @noaa.gov email
+    // Helper function: Check if user is authenticated
     function isAuthenticated() {
-      return request.auth != null &&
-             request.auth.token.email.matches('.*@noaa[.]gov$');
+      return request.auth != null;
     }
 
     // Helper function: Check if user owns the document (by techId/userId)
