@@ -85,9 +85,11 @@
     // ============================================================================
     // PORTAL PASSWORD CONFIGURATION
     // ============================================================================
-    // Change this password to secure your portal
-    // Everyone on your team will use this same password to access the portal
-    const PORTAL_PASSWORD = 'ewx-nwr!@#$56789';
+    // Multiple passwords for different access levels
+    const PASSWORDS = {
+      admin: 'ewx-nwr_adm142318',    // Full access: edit calendar, sites, logs
+      viewer: 'ewx-nwr!@#$56789'     // Read-only access
+    };
     // ============================================================================
 
     // Icons Component
@@ -3025,22 +3027,9 @@
 
           setUser(u);
 
-          // Fetch user role from Firebase
-          try {
-            const roleDoc = await db.collection('artifacts').doc(appId).collection('public').doc('data')
-              .collection('user_roles').doc(u.uid).get();
-
-            if (roleDoc.exists) {
-              setUserRole(roleDoc.data().role || 'viewer');
-            } else {
-              // Default to viewer for new users
-              setUserRole('viewer');
-            }
-          } catch (error) {
-            console.error('Error fetching user role:', error);
-            setUserRole('viewer');
-          }
-
+          // Get user role from session storage (set during login)
+          const savedRole = sessionStorage.getItem('portal_role');
+          setUserRole(savedRole || 'viewer');
           setLoading(false);
         });
 
@@ -3049,9 +3038,19 @@
 
       const handlePasswordSubmit = (e) => {
         e.preventDefault();
-        if (passwordInput === PORTAL_PASSWORD) {
+
+        // Check which password was entered and assign role
+        let role = null;
+        if (passwordInput === PASSWORDS.admin) {
+          role = 'admin';
+        } else if (passwordInput === PASSWORDS.viewer) {
+          role = 'viewer';
+        }
+
+        if (role) {
           setAuthenticated(true);
           sessionStorage.setItem('portal_authenticated', 'true');
+          sessionStorage.setItem('portal_role', role);
           setPasswordInput('');
         } else {
           alert('Incorrect password. Please try again.');
@@ -3061,6 +3060,7 @@
 
       const handleSignOut = () => {
         sessionStorage.removeItem('portal_authenticated');
+        sessionStorage.removeItem('portal_role');
         setAuthenticated(false);
         setUser(null);
         setUserRole(null);
