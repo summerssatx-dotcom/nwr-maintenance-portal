@@ -63,6 +63,33 @@ service cloud.firestore {
           allow update, delete: if isAuthenticated() &&
                                    isOwner(resource.data.userId);
         }
+
+        // Calendar events subcollection (shared team calendar)
+        match /calendar_events/{eventId} {
+          // Allow read access to all authenticated users
+          allow read: if isAuthenticated();
+
+          // Allow create/update/delete for all authenticated users (team collaboration)
+          allow create, update, delete: if isAuthenticated();
+        }
+
+        // Site statuses subcollection (shared team data)
+        match /site_statuses/{siteId} {
+          // Allow read access to all authenticated users
+          allow read: if isAuthenticated();
+
+          // Allow create/update/delete for all authenticated users (team collaboration)
+          allow create, update, delete: if isAuthenticated();
+        }
+
+        // Maintenance log subcollection (shared team log)
+        match /maintenance_log/{logId} {
+          // Allow read access to all authenticated users
+          allow read: if isAuthenticated();
+
+          // Allow create/update/delete for all authenticated users (team collaboration)
+          allow create, update, delete: if isAuthenticated();
+        }
       }
     }
 

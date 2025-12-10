@@ -624,10 +624,22 @@
       const [entries, setEntries] = useState([]);
       const [showAdd, setShowAdd] = useState(false);
       const [newEntry, setNewEntry] = useState({ siteId: '', time: '', remarks: '', initials: '' });
+      const [loading, setLoading] = useState(true);
 
+      // Load maintenance log entries from Firebase
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-maintenance-log');
-        if (saved) setEntries(JSON.parse(saved));
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('maintenance_log')
+          .orderBy('timestamp', 'desc')
+          .onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEntries(data);
+            setLoading(false);
+          }, error => {
+            console.error('Error loading maintenance log:', error);
+            setLoading(false);
+          });
+        return () => unsubscribe();
       }, []);
 
       useEffect(() => {
@@ -639,12 +651,7 @@
         }
       }, [showAdd]);
 
-      const saveEntries = (updated) => {
-        setEntries(updated);
-        localStorage.setItem('nwr-maintenance-log', JSON.stringify(updated));
-      };
-
-      const addEntry = () => {
+      const addEntry = async () => {
         // Input validation
         if (!newEntry.siteId) {
           alert('⚠️ Please select a site');
@@ -670,7 +677,6 @@
         const now = new Date();
         const site = SITES.find(s => s.id === newEntry.siteId);
         const entry = {
-          id: Date.now(),
           date: now.toISOString().split('T')[0],
           time: newEntry.time,
           siteId: newEntry.siteId,
@@ -682,7 +688,8 @@
         };
 
         try {
-          saveEntries([entry, ...entries]); // Newest first
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('maintenance_log').add(entry);
           setNewEntry({ siteId: '', time: '', remarks: '', initials: '' });
           setShowAdd(false);
         } catch (error) {
@@ -691,9 +698,15 @@
         }
       };
 
-      const deleteEntry = (id) => {
+      const deleteEntry = async (id) => {
         if (confirm('Delete this log entry?')) {
-          saveEntries(entries.filter(e => e.id !== id));
+          try {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('maintenance_log').doc(id).delete();
+          } catch (error) {
+            console.error('Error deleting log entry:', error);
+            alert('❌ Error deleting log entry. Please try again.');
+          }
         }
       };
 
@@ -1737,25 +1750,27 @@
     // Maintenance Calendar
     const MaintenanceCalendar = () => {
       const [currentDate, setCurrentDate] = useState(new Date());
-      const [events, setEvents] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events');
-        return saved ? JSON.parse(saved) : [
-          { id: 1, date: '2025-11-29', siteId: 'AUS', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 2, date: '2025-11-30', siteId: 'SAT', type: 'routine', completed: false, notes: 'Annual inspection' },
-          { id: 3, date: '2025-12-02', siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
-          { id: 4, date: '2025-12-05', siteId: 'GNZ', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 5, date: '2025-11-25', siteId: 'DRT', type: 'routine', completed: true, notes: 'Completed inspection' },
-        ];
-      });
+      const [events, setEvents] = useState([]);
       const [showModal, setShowModal] = useState(false);
       const [editEvent, setEditEvent] = useState(null);
       const [isEditing, setIsEditing] = useState(false);
       const [form, setForm] = useState({ date: '', siteId: '', type: 'routine', notes: '' });
+      const [loading, setLoading] = useState(true);
 
+      // Load events from Firebase
       useEffect(() => {
-        localStorage.setItem('nwr_calendar_events', JSON.stringify(events));
-        window.dispatchEvent(new Event('calendarUpdate'));
-      }, [events]);
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('calendar_events')
+          .onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEvents(data);
+            setLoading(false);
+          }, error => {
+            console.error('Error loading calendar events:', error);
+            setLoading(false);
+          });
+        return () => unsubscribe();
+      }, []);
 
       const today = new Date().toISOString().split('T')[0];
       const year = currentDate.getFullYear();
@@ -1795,26 +1810,47 @@
         setShowModal(true);
       };
 
-      const saveEvent = () => {
+      const saveEvent = async () => {
         if (!form.date || !form.siteId) return alert('Please select date and site');
-        if (editEvent) {
-          setEvents(events.map(e => e.id === editEvent.id ? { ...e, ...form } : e));
-        } else {
-          setEvents([...events, { id: Date.now(), ...form, completed: false }]);
-        }
-        setShowModal(false);
-        setIsEditing(false);
-      };
-
-      const deleteEvent = (id) => {
-        if (confirm('Delete this event?')) {
-          setEvents(events.filter(e => e.id !== id));
+        try {
+          const eventsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events');
+          if (editEvent) {
+            await eventsRef.doc(editEvent.id).update(form);
+          } else {
+            await eventsRef.add({ ...form, completed: false, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+          }
           setShowModal(false);
+          setIsEditing(false);
+        } catch (error) {
+          console.error('Error saving event:', error);
+          alert('Failed to save event. Please try again.');
         }
       };
 
-      const toggleComplete = (id) => {
-        setEvents(events.map(e => e.id === id ? { ...e, completed: !e.completed } : e));
+      const deleteEvent = async (id) => {
+        if (confirm('Delete this event?')) {
+          try {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events').doc(id).delete();
+            setShowModal(false);
+          } catch (error) {
+            console.error('Error deleting event:', error);
+            alert('Failed to delete event. Please try again.');
+          }
+        }
+      };
+
+      const toggleComplete = async (id) => {
+        const event = events.find(e => e.id === id);
+        if (event) {
+          try {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events').doc(id).update({
+              completed: !event.completed
+            });
+          } catch (error) {
+            console.error('Error toggling completion:', error);
+            alert('Failed to update event. Please try again.');
+          }
+        }
       };
 
       const getEventsForDate = (day) => {
@@ -1992,28 +2028,19 @@
 
     // Dashboard
     const Dashboard = ({ setTab }) => {
-      const [events, setEvents] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events');
-        return saved ? JSON.parse(saved) : [];
-      });
+      const [events, setEvents] = useState([]);
 
-      // Listen for changes to localStorage (when calendar events are updated)
+      // Load calendar events from Firebase (real-time updates)
       useEffect(() => {
-        const handleStorageChange = () => {
-          const saved = localStorage.getItem('nwr_calendar_events');
-          setEvents(saved ? JSON.parse(saved) : []);
-        };
-
-        // Listen for storage events from other tabs/windows
-        window.addEventListener('storage', handleStorageChange);
-
-        // Also listen for custom event from same tab
-        window.addEventListener('calendarUpdate', handleStorageChange);
-
-        return () => {
-          window.removeEventListener('storage', handleStorageChange);
-          window.removeEventListener('calendarUpdate', handleStorageChange);
-        };
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('calendar_events')
+          .onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEvents(data);
+          }, error => {
+            console.error('Error loading calendar events:', error);
+          });
+        return () => unsubscribe();
       }, []);
 
       const today = new Date().toISOString().split('T')[0];
@@ -2139,24 +2166,33 @@
         return () => unsubscribe();
       }, [timeRange, selectedSite]);
 
-      // Load and filter maintenance log entries
+      // Load and filter maintenance log entries from Firebase
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-maintenance-log');
-        if (saved) {
-          const allLogs = JSON.parse(saved);
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
-          
-          let filtered = allLogs.filter(log => new Date(log.timestamp) >= cutoff);
-          
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
+
+        let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('maintenance_log')
+          .orderBy('timestamp', 'desc');
+
+        const unsubscribe = query.onSnapshot(snapshot => {
+          let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // Filter by date range
+          data = data.filter(log => new Date(log.timestamp) >= cutoff);
+
+          // Filter by site if specified
           if (selectedSite !== 'all') {
-            filtered = filtered.filter(log => log.siteId === selectedSite);
+            data = data.filter(log => log.siteId === selectedSite);
           }
-          
-          setLogEntries(filtered);
-        } else {
+
+          setLogEntries(data);
+        }, error => {
+          console.error('Error loading maintenance log:', error);
           setLogEntries([]);
-        }
+        });
+
+        return () => unsubscribe();
       }, [timeRange, selectedSite]);
 
       const exportCSV = () => {
@@ -2509,21 +2545,43 @@
     const SitesList = () => {
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
-      const [siteStatuses, setSiteStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr_site_statuses');
-        if (saved) return JSON.parse(saved);
-        // Initialize all sites as 'online'
-        const initial = {};
-        SITES.forEach(site => initial[site.id] = 'online');
-        return initial;
-      });
+      const [siteStatuses, setSiteStatuses] = useState({});
+      const [loading, setLoading] = useState(true);
 
+      // Load site statuses from Firebase
       useEffect(() => {
-        localStorage.setItem('nwr_site_statuses', JSON.stringify(siteStatuses));
-      }, [siteStatuses]);
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('site_statuses')
+          .onSnapshot(snapshot => {
+            const statusMap = {};
+            snapshot.docs.forEach(doc => {
+              statusMap[doc.id] = doc.data().status || 'online';
+            });
+            // Initialize missing sites as 'online'
+            SITES.forEach(site => {
+              if (!statusMap[site.id]) statusMap[site.id] = 'online';
+            });
+            setSiteStatuses(statusMap);
+            setLoading(false);
+          }, error => {
+            console.error('Error loading site statuses:', error);
+            // Initialize all as online on error
+            const initial = {};
+            SITES.forEach(site => initial[site.id] = 'online');
+            setSiteStatuses(initial);
+            setLoading(false);
+          });
+        return () => unsubscribe();
+      }, []);
 
-      const updateSiteStatus = (siteId, newStatus) => {
-        setSiteStatuses(prev => ({ ...prev, [siteId]: newStatus }));
+      const updateSiteStatus = async (siteId, newStatus) => {
+        try {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('site_statuses').doc(siteId).set({ status: newStatus });
+        } catch (error) {
+          console.error('Error updating site status:', error);
+          alert('Failed to update site status. Please try again.');
+        }
       };
 
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
