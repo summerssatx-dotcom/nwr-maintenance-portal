@@ -8,8 +8,8 @@ service cloud.firestore {
     // ============================================================================
     //
     // IMPORTANT: Deploy these rules to Firebase Console
-    // Current State: Google Sign-In with @noaa.gov domain restriction
-    // Role-Based Access Control: admin, editor, viewer
+    // Current State: Password-based authentication with anonymous Firebase auth
+    // Access control: Admin vs Viewer handled by password system
     // ============================================================================
 
     // Helper function: Check if user is authenticated
@@ -20,22 +20,6 @@ service cloud.firestore {
     // Helper function: Check if user owns the document (by techId/userId)
     function isOwner(userId) {
       return request.auth.uid == userId;
-    }
-
-    // Helper function: Get user role from user_roles collection
-    function getUserRole() {
-      return get(/databases/$(database)/documents/artifacts/$(appId)/public/data/user_roles/$(request.auth.uid)).data.role;
-    }
-
-    // Helper function: Check if user can edit (admin or editor)
-    function canEdit() {
-      let role = getUserRole();
-      return role == 'admin' || role == 'editor';
-    }
-
-    // Helper function: Check if user is admin
-    function isAdmin() {
-      return getUserRole() == 'admin';
     }
 
     // Helper function: Validate inspection data structure
@@ -81,40 +65,31 @@ service cloud.firestore {
                                    isOwner(resource.data.userId);
         }
 
-        // User roles subcollection (for role-based access control)
-        match /user_roles/{userId} {
-          // Anyone authenticated can read their own role
-          allow read: if isAuthenticated();
-
-          // Only admins can create/update/delete user roles
-          allow create, update, delete: if isAdmin();
-        }
-
         // Calendar events subcollection (shared team calendar)
         match /calendar_events/{eventId} {
-          // Allow read access to all authenticated users
-          allow read: if isAuthenticated();
-
-          // Allow create/update/delete only for admins and editors
-          allow create, update, delete: if isAuthenticated() && canEdit();
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
         }
 
         // Site statuses subcollection (shared team data)
         match /site_statuses/{siteId} {
-          // Allow read access to all authenticated users
-          allow read: if isAuthenticated();
-
-          // Allow create/update/delete only for admins and editors
-          allow create, update, delete: if isAuthenticated() && canEdit();
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
         }
 
         // Maintenance log subcollection (shared team log)
         match /maintenance_log/{logId} {
-          // Allow read access to all authenticated users
-          allow read: if isAuthenticated();
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
 
-          // Allow create/update/delete only for admins and editors
-          allow create, update, delete: if isAuthenticated() && canEdit();
+        // User roles subcollection (for future use)
+        match /user_roles/{userId} {
+          // Allow read/write access to authenticated users
+          allow read, write: if isAuthenticated();
         }
       }
     }
@@ -122,9 +97,9 @@ service cloud.firestore {
     // ============================================================================
     // IMPLEMENTED SECURITY FEATURES:
     // ============================================================================
-    // ✅ 1. Google Sign-In with @noaa.gov domain restriction
-    // ✅ 2. Role-based access control (admin, editor, viewer)
-    // ✅ 3. User roles managed in Firebase Console
+    // ✅ 1. Password-based authentication (admin vs viewer)
+    // ✅ 2. Anonymous Firebase authentication for database access
+    // ✅ 3. Access control via password system in application layer
     //
     // FUTURE ENHANCEMENTS:
     // ============================================================================
