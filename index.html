@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -80,6 +81,7 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
+    const storage = firebase.storage();
     const appId = 'nwr-maintenance-v2';
 
     // ============================================================================
@@ -2582,6 +2584,252 @@
       );
     };
 
+    // Resources
+    const Resources = ({ userRole }) => {
+      const [resources, setResources] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [uploading, setUploading] = useState(false);
+      const [uploadProgress, setUploadProgress] = useState(0);
+
+      // Category definitions with icons and colors
+      const categories = [
+        { id: 'manuals', name: 'System Manuals', icon: 'Book', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+        { id: 'training', name: 'Training Materials', icon: 'GraduationCap', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+        { id: 'courses', name: 'Course Materials', icon: 'BookOpen', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+        { id: 'forms', name: 'Forms & Templates', icon: 'FileText', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+        { id: 'other', name: 'Other Resources', icon: 'FolderOpen', color: 'text-slate-400', bg: 'bg-slate-500/10' }
+      ];
+
+      // Load resources from Firebase Storage
+      useEffect(() => {
+        const loadResources = async () => {
+          try {
+            const storageRef = storage.ref('resources');
+            const result = await storageRef.listAll();
+
+            const filePromises = result.items.map(async (itemRef) => {
+              const url = await itemRef.getDownloadURL();
+              const metadata = await itemRef.getMetadata();
+              const pathParts = itemRef.fullPath.split('/');
+              const category = pathParts.length > 1 ? pathParts[1] : 'other';
+
+              return {
+                name: itemRef.name,
+                url: url,
+                size: metadata.size,
+                type: metadata.contentType,
+                category: category,
+                updated: metadata.updated
+              };
+            });
+
+            const files = await Promise.all(filePromises);
+            setResources(files);
+            setLoading(false);
+          } catch (error) {
+            console.error('Error loading resources:', error);
+            setLoading(false);
+          }
+        };
+
+        loadResources();
+      }, []);
+
+      // Upload file handler (admin only)
+      const handleUpload = async (e, category) => {
+        if (userRole !== 'admin') {
+          alert('Only admins can upload files');
+          return;
+        }
+
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+          const storageRef = storage.ref(`resources/${category}/${file.name}`);
+          const uploadTask = storageRef.put(file);
+
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error('Upload error:', error);
+              alert('Upload failed: ' + error.message);
+              setUploading(false);
+            },
+            async () => {
+              alert('✓ File uploaded successfully!');
+              setUploading(false);
+              setUploadProgress(0);
+              // Reload resources
+              window.location.reload();
+            }
+          );
+        } catch (error) {
+          console.error('Upload error:', error);
+          alert('Upload failed: ' + error.message);
+          setUploading(false);
+        }
+      };
+
+      // Delete file handler (admin only)
+      const handleDelete = async (resource) => {
+        if (userRole !== 'admin') {
+          alert('Only admins can delete files');
+          return;
+        }
+
+        if (!confirm(`Delete ${resource.name}?`)) return;
+
+        try {
+          const storageRef = storage.ref(`resources/${resource.category}/${resource.name}`);
+          await storageRef.delete();
+          alert('✓ File deleted successfully!');
+          setResources(resources.filter(r => r.name !== resource.name));
+        } catch (error) {
+          console.error('Delete error:', error);
+          alert('Delete failed: ' + error.message);
+        }
+      };
+
+      // Format file size
+      const formatSize = (bytes) => {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      };
+
+      // Get file icon based on type
+      const getFileIcon = (type) => {
+        if (type?.includes('pdf')) return 'FileText';
+        if (type?.includes('image')) return 'Image';
+        if (type?.includes('video')) return 'Video';
+        if (type?.includes('word') || type?.includes('document')) return 'FileText';
+        if (type?.includes('sheet') || type?.includes('excel')) return 'Table';
+        if (type?.includes('presentation') || type?.includes('powerpoint')) return 'Presentation';
+        return 'File';
+      };
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-noaa-sky border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading resources...</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-6 animate-in">
+          {/* Header */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Icon name="FolderOpen" className="w-5 h-5 text-noaa-sky" /> Resources Library
+                </h2>
+                <p className="text-sm text-slate-400 mt-1">{resources.length} files available</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Categories */}
+          {categories.map(cat => {
+            const categoryFiles = resources.filter(r => r.category === cat.id);
+
+            return (
+              <div key={cat.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${cat.bg}`}>
+                      <Icon name={cat.icon} className={`w-5 h-5 ${cat.color}`} />
+                    </div>
+                    {cat.name}
+                    <span className="text-sm text-slate-500">({categoryFiles.length})</span>
+                  </h3>
+
+                  {userRole === 'admin' && (
+                    <label className="px-4 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-sm font-semibold rounded-lg cursor-pointer transition-colors flex items-center gap-2">
+                      <Icon name="Upload" className="w-4 h-4" />
+                      Upload
+                      <input
+                        type="file"
+                        onChange={(e) => handleUpload(e, cat.id)}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {categoryFiles.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">
+                    <Icon name="Inbox" className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No files in this category</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categoryFiles.map(file => (
+                      <div key={file.name} className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4 hover:border-noaa-sky/50 transition-all">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-slate-800 rounded-lg">
+                            <Icon name={getFileIcon(file.type)} className="w-5 h-5 text-noaa-sky" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-white text-sm truncate" title={file.name}>
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">{formatSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 px-3 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Icon name="Download" className="w-3 h-3" />
+                            Download
+                          </a>
+                          {userRole === 'admin' && (
+                            <button
+                              onClick={() => handleDelete(file)}
+                              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold rounded-lg transition-colors"
+                            >
+                              <Icon name="Trash2" className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="fixed bottom-24 right-6 bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl z-50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 border-4 border-noaa-sky border-t-transparent rounded-full animate-spin"></div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Uploading...</p>
+                  <p className="text-slate-400 text-xs">{Math.round(uploadProgress)}%</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     // Sites
     const SitesList = () => {
       const [q, setQ] = useState('');
@@ -3164,6 +3412,7 @@
         { id: 'forms', label: 'Inspection', icon: 'ClipboardList' },
         { id: 'history', label: 'History', icon: 'Archive' },
         { id: 'analytics', label: 'Analytics', icon: 'TrendingUp' },
+        { id: 'resources', label: 'Resources', icon: 'FolderOpen' },
         { id: 'sites', label: 'Sites', icon: 'Radio' }
       ];
 
@@ -3251,6 +3500,7 @@
             {tab === 'forms' && <InspectionForm user={user} userRole={userRole} editingInspection={editingInspection} setEditingInspection={setEditingInspection} />}
             {tab === 'history' && <PastInspections setTab={setTab} setEditingInspection={setEditingInspection} userRole={userRole} />}
             {tab === 'analytics' && <Analytics />}
+            {tab === 'resources' && <Resources userRole={userRole} />}
             {tab === 'sites' && <SitesList userRole={userRole} />}
           </main>
           <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-noaa-blue/95 border-t border-slate-800 px-2 py-2 z-50">
