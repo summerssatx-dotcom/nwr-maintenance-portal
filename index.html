@@ -2605,24 +2605,28 @@
             const storageRef = storage.ref('Resources');
             const result = await storageRef.listAll();
 
-            const filePromises = result.items.map(async (itemRef) => {
-              const url = await itemRef.getDownloadURL();
-              const metadata = await itemRef.getMetadata();
-              const pathParts = itemRef.fullPath.split('/');
-              const category = pathParts.length > 1 ? pathParts[1] : 'other';
+            // Get files from all subfolders (Armstrong, Crown, Nautel)
+            const allFiles = [];
+            for (const folderRef of result.prefixes) {
+              const folderResult = await folderRef.listAll();
+              const folderName = folderRef.name; // Armstrong, Crown, or Nautel
 
-              return {
-                name: itemRef.name,
-                url: url,
-                size: metadata.size,
-                type: metadata.contentType,
-                category: category,
-                updated: metadata.updated
-              };
-            });
+              for (const itemRef of folderResult.items) {
+                const url = await itemRef.getDownloadURL();
+                const metadata = await itemRef.getMetadata();
 
-            const files = await Promise.all(filePromises);
-            setResources(files);
+                allFiles.push({
+                  name: itemRef.name,
+                  url: url,
+                  size: metadata.size,
+                  type: metadata.contentType,
+                  category: folderName,
+                  updated: metadata.updated
+                });
+              }
+            }
+
+            setResources(allFiles);
             setLoading(false);
           } catch (error) {
             console.error('Error loading resources:', error);
