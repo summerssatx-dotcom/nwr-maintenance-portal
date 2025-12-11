@@ -2593,16 +2593,16 @@
 
       // Category definitions with icons and colors - Organized by transmitter type
       const categories = [
-        { id: 'armstrong', name: 'Armstrong Transmitters', icon: 'Radio', color: 'text-purple-400', bg: 'bg-purple-500/10' },
-        { id: 'crown', name: 'Crown Transmitters', icon: 'Radio', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-        { id: 'nautel', name: 'Nautel Transmitters', icon: 'Radio', color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
+        { id: 'Armstrong', name: 'Armstrong Transmitters', icon: 'Radio', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+        { id: 'Crown', name: 'Crown Transmitters', icon: 'Radio', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+        { id: 'Nautel', name: 'Nautel Transmitters', icon: 'Radio', color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
       ];
 
       // Load resources from Firebase Storage
       useEffect(() => {
         const loadResources = async () => {
           try {
-            const storageRef = storage.ref('resources');
+            const storageRef = storage.ref('Resources');
             const result = await storageRef.listAll();
 
             const filePromises = result.items.map(async (itemRef) => {
