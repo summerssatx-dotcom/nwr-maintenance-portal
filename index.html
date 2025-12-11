@@ -814,7 +814,7 @@
       );
     };
 
-    const InspectionForm = ({ user }) => {
+    const InspectionForm = ({ user, userRole, editingInspection, setEditingInspection }) => {
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
@@ -825,6 +825,18 @@
 
       const set = useCallback((f, v) => setData(p => ({ ...p, [f]: v })), []);
       const site = SITES.find(s => s.id === data.siteId);
+
+      // Load data when editing an inspection
+      useEffect(() => {
+        if (editingInspection) {
+          setData(editingInspection);
+          // Set transmitter type states
+          if (editingInspection.txType) setTxType(editingInspection.txType);
+          if (editingInspection.isClassic !== undefined) setIsClassic(editingInspection.isClassic);
+          if (editingInspection.is1KW !== undefined) setIs1KW(editingInspection.is1KW);
+          if (editingInspection.activeTx) setActiveTx(editingInspection.activeTx);
+        }
+      }, [editingInspection]);
 
       const handleSiteChange = (id) => {
         const s = SITES.find(x => x.id === id);
@@ -846,11 +858,30 @@
 
         setSaving(true);
         try {
-          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('inspections').add({
+          const inspectionData = {
             ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-            timestamp: new Date().toISOString(), techId: user?.uid
-          });
-          alert('✓ Inspection saved successfully!');
+            techId: user?.uid
+          };
+
+          if (editingInspection && editingInspection.id) {
+            // Update existing inspection
+            const { id, ...dataToUpdate } = inspectionData;
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').doc(editingInspection.id).update({
+                ...dataToUpdate,
+                lastModified: new Date().toISOString()
+              });
+            alert('✓ Inspection updated successfully!');
+            setEditingInspection(null);
+          } else {
+            // Create new inspection
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').add({
+                ...inspectionData,
+                timestamp: new Date().toISOString()
+              });
+            alert('✓ Inspection saved successfully!');
+          }
           setStep(1); setData({}); setTxType(null);
         } catch (e) {
           console.error('Error saving inspection:', e);
@@ -2787,11 +2818,17 @@
     };
 
     // Past Inspections History
-    const PastInspections = () => {
+    const PastInspections = ({ setTab, setEditingInspection, userRole }) => {
       const [inspections, setInspections] = useState([]);
       const [loading, setLoading] = useState(true);
       const [selectedInspection, setSelectedInspection] = useState(null);
       const [searchTerm, setSearchTerm] = useState('');
+
+      const handleEdit = (inspection) => {
+        setEditingInspection(inspection);
+        setSelectedInspection(null);
+        setTab('forms');
+      };
 
       useEffect(() => {
         const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
@@ -2918,12 +2955,23 @@
                       {getSiteName(selectedInspection.siteId)} • {selectedInspection.date}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedInspection(null)}
-                    className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    <Icon name="X" className="w-6 h-6 text-slate-400" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => handleEdit(selectedInspection)}
+                        className="px-4 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Icon name="Edit" className="w-4 h-4" />
+                        Edit
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedInspection(null)}
+                      className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <Icon name="X" className="w-6 h-6 text-slate-400" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Modal Content */}
@@ -2997,6 +3045,7 @@
       const [tab, setTab] = useState('dashboard');
       const [authenticated, setAuthenticated] = useState(false);
       const [passwordInput, setPasswordInput] = useState('');
+      const [editingInspection, setEditingInspection] = useState(null);
 
       // Check if already authenticated in session
       useEffect(() => {
@@ -3199,8 +3248,8 @@
               </div>
             )}
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
-            {tab === 'forms' && <InspectionForm user={user} userRole={userRole} />}
-            {tab === 'history' && <PastInspections />}
+            {tab === 'forms' && <InspectionForm user={user} userRole={userRole} editingInspection={editingInspection} setEditingInspection={setEditingInspection} />}
+            {tab === 'history' && <PastInspections setTab={setTab} setEditingInspection={setEditingInspection} userRole={userRole} />}
             {tab === 'analytics' && <Analytics />}
             {tab === 'sites' && <SitesList userRole={userRole} />}
           </main>
