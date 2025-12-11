@@ -1,13 +1,13 @@
 rules_version = '2';
 
 // Firebase Storage Security Rules for NWR Maintenance Portal
-// Resources library - manuals, training materials, courses, forms
+// Resources library - organized by transmitter type
 
 service firebase.storage {
   match /b/{bucket}/o {
 
     // Resources folder structure: /resources/{category}/{filename}
-    // Categories: manuals, training, courses, forms, other
+    // Categories: armstrong, crown, nautel
     match /resources/{category}/{filename} {
       // Allow all authenticated users to read (download) resources
       allow read: if request.auth != null;
