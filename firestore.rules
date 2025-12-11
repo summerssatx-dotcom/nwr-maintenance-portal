@@ -91,6 +91,13 @@ service cloud.firestore {
           // Allow read/write access to authenticated users
           allow read, write: if isAuthenticated();
         }
+
+        // Parts on order subcollection (shared team resource)
+        match /parts/{partId} {
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
       }
     }
 

@@ -397,17 +397,25 @@
       const [showAdd, setShowAdd] = useState(false);
       const [newPart, setNewPart] = useState({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
 
+      // Load parts from Firebase
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-parts-tracker');
-        if (saved) setParts(JSON.parse(saved));
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('parts')
+          .orderBy('addedDate', 'desc')
+          .onSnapshot(snapshot => {
+            const loadedParts = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setParts(loadedParts);
+          }, error => {
+            console.error('Error loading parts:', error);
+          });
+
+        return () => unsubscribe();
       }, []);
 
-      const saveParts = (updated) => {
-        setParts(updated);
-        localStorage.setItem('nwr-parts-tracker', JSON.stringify(updated));
-      };
-
-      const addPart = () => {
+      const addPart = async () => {
         // Input validation
         if (!newPart.name || newPart.name.trim().length === 0) {
           alert('⚠️ Please enter part name');
@@ -423,10 +431,12 @@
             ...newPart,
             name: newPart.name.trim(),
             partNum: newPart.partNum.trim(),
-            id: Date.now(),
             addedDate: new Date().toISOString()
           };
-          saveParts([...parts, part]);
+
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').add(part);
+
           setNewPart({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
           setShowAdd(false);
         } catch (error) {
@@ -435,10 +445,24 @@
         }
       };
 
-      const removePart = (id) => saveParts(parts.filter(p => p.id !== id));
+      const removePart = async (id) => {
+        try {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').doc(id).delete();
+        } catch (error) {
+          console.error('Error removing part:', error);
+          alert('❌ Error removing part. Please try again.');
+        }
+      };
 
-      const updateStatus = (id, status) => {
-        saveParts(parts.map(p => p.id === id ? { ...p, status } : p));
+      const updateStatus = async (id, status) => {
+        try {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').doc(id).update({ status });
+        } catch (error) {
+          console.error('Error updating part status:', error);
+          alert('❌ Error updating status. Please try again.');
+        }
       };
 
       const statusColor = (status) => {
