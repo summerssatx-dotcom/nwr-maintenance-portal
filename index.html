@@ -3200,7 +3200,7 @@
                     <div className="flex justify-between">
                       <span className="text-slate-500">Submitted</span>
                       <span className="text-slate-400 text-xs">
-                        {inspection.timestamp ? new Date(inspection.timestamp.seconds * 1000).toLocaleDateString() : 'N/A'}
+                        {inspection.timestamp ? new Date(inspection.timestamp).toLocaleDateString() : 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -3268,7 +3268,7 @@
                       <div>
                         <p className="text-slate-500">Submitted</p>
                         <p className="text-white">
-                          {selectedInspection.timestamp ? new Date(selectedInspection.timestamp.seconds * 1000).toLocaleString() : 'N/A'}
+                          {selectedInspection.timestamp ? new Date(selectedInspection.timestamp).toLocaleString() : 'N/A'}
                         </p>
                       </div>
                     </div>
