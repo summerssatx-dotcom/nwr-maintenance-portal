@@ -8,8 +8,8 @@ service cloud.firestore {
     // ============================================================================
     //
     // IMPORTANT: Deploy these rules to Firebase Console
-    // Current State: Password-based authentication with anonymous Firebase auth
-    // Access control: Admin vs Viewer handled by password system
+    // Current State: Email/Password authentication with Firebase Auth
+    // Access control: Admin vs Viewer roles stored in user_roles collection
     // ============================================================================
 
     // Helper function: Check if user is authenticated
@@ -104,15 +104,16 @@ service cloud.firestore {
     // ============================================================================
     // IMPLEMENTED SECURITY FEATURES:
     // ============================================================================
-    // ✅ 1. Password-based authentication (admin vs viewer)
-    // ✅ 2. Anonymous Firebase authentication for database access
-    // ✅ 3. Access control via password system in application layer
+    // ✅ 1. Email/Password authentication via Firebase Auth
+    // ✅ 2. Role-based access (admin vs viewer) stored in user_roles collection
+    // ✅ 3. Per-user authentication with unique accounts
     //
     // FUTURE ENHANCEMENTS:
     // ============================================================================
-    // 1. Add field-level validation for all data types
-    // 2. Implement rate limiting to prevent abuse
-    // 3. Add audit logging for all write operations
+    // 1. Enforce role-based access in Firestore rules (not just UI)
+    // 2. Add field-level validation for all data types
+    // 3. Implement rate limiting to prevent abuse
+    // 4. Add audit logging for all write operations
     // ============================================================================
 
     // Deny all other access by default

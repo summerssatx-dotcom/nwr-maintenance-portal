@@ -85,13 +85,10 @@
     const appId = 'nwr-maintenance-v2';
 
     // ============================================================================
-    // PORTAL PASSWORD CONFIGURATION
+    // AUTHENTICATION CONFIGURATION
     // ============================================================================
-    // Multiple passwords for different access levels
-    const PASSWORDS = {
-      admin: 'ewx-nwr_adm142318',    // Full access: edit calendar, sites, logs
-      viewer: 'ewx-nwr!@#$56789'     // Read-only access
-    };
+    // Using Firebase Email/Password authentication
+    // User roles stored in Firestore: artifacts/{appId}/public/data/user_roles/{uid}
     // ============================================================================
 
     // Icons Component
@@ -3317,82 +3314,83 @@
       const [userRole, setUserRole] = useState(null);
       const [loading, setLoading] = useState(true);
       const [tab, setTab] = useState('dashboard');
-      const [authenticated, setAuthenticated] = useState(false);
+      const [emailInput, setEmailInput] = useState('');
       const [passwordInput, setPasswordInput] = useState('');
+      const [loggingIn, setLoggingIn] = useState(false);
       const [editingInspection, setEditingInspection] = useState(null);
 
-      // Check if already authenticated in session
+      // Listen for authentication state changes
       useEffect(() => {
-        const savedAuth = sessionStorage.getItem('portal_authenticated');
-        if (savedAuth === 'true') {
-          setAuthenticated(true);
-        }
-      }, []);
-
-      useEffect(() => {
-        if (!authenticated) {
-          setLoading(false);
-          return;
-        }
-
         const unsub = auth.onAuthStateChanged(async (u) => {
           if (!u) {
-            // Sign in anonymously if not signed in
-            try {
-              await auth.signInAnonymously();
-              return; // Will trigger this useEffect again
-            } catch (error) {
-              console.error('Anonymous sign-in error:', error);
-              setLoading(false);
-              return;
-            }
+            setLoading(false);
+            setUser(null);
+            setUserRole(null);
+            return;
           }
 
           setUser(u);
 
-          // Get user role from session storage (set during login)
-          const savedRole = sessionStorage.getItem('portal_role');
-          setUserRole(savedRole || 'viewer');
+          // Fetch user role from Firestore
+          try {
+            const roleDoc = await db.collection('artifacts').doc(appId)
+              .collection('public').doc('data')
+              .collection('user_roles').doc(u.uid).get();
+
+            if (roleDoc.exists) {
+              setUserRole(roleDoc.data().role || 'viewer');
+            } else {
+              console.warn('No role found for user, defaulting to viewer');
+              setUserRole('viewer');
+            }
+          } catch (error) {
+            console.error('Error fetching user role:', error);
+            setUserRole('viewer');
+          }
+
           setLoading(false);
         });
 
         return unsub;
-      }, [authenticated]);
+      }, []);
 
-      const handlePasswordSubmit = (e) => {
+      const handleLoginSubmit = async (e) => {
         e.preventDefault();
+        setLoggingIn(true);
 
-        // Check which password was entered and assign role
-        let role = null;
-        if (passwordInput === PASSWORDS.admin) {
-          role = 'admin';
-        } else if (passwordInput === PASSWORDS.viewer) {
-          role = 'viewer';
-        }
+        try {
+          await auth.signInWithEmailAndPassword(emailInput, passwordInput);
+          // onAuthStateChanged will handle the rest
+          setEmailInput('');
+          setPasswordInput('');
+        } catch (error) {
+          console.error('Login error:', error);
+          let errorMessage = 'Login failed. Please check your credentials.';
 
-        if (role) {
-          setAuthenticated(true);
-          sessionStorage.setItem('portal_authenticated', 'true');
-          sessionStorage.setItem('portal_role', role);
+          if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email.';
+          } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password.';
+          } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+          } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many failed attempts. Please try again later.';
+          }
+
+          alert('❌ ' + errorMessage);
           setPasswordInput('');
-        } else {
-          alert('Incorrect password. Please try again.');
-          setPasswordInput('');
+        } finally {
+          setLoggingIn(false);
         }
       };
 
       const handleSignOut = () => {
-        sessionStorage.removeItem('portal_authenticated');
-        sessionStorage.removeItem('portal_role');
-        setAuthenticated(false);
-        setUser(null);
-        setUserRole(null);
         auth.signOut();
       };
 
       if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" /></div>;
 
-      if (!authenticated || !user) return (
+      if (!user) return (
         <div className="min-h-screen bg-gradient-to-br from-noaa-blue via-slate-900 to-noaa-blue flex items-center justify-center p-4">
           <div className="bg-slate-900/90 border border-slate-700/50 rounded-2xl p-8 max-w-md w-full">
             <div className="text-center mb-6">
@@ -3402,28 +3400,52 @@
               <h1 className="text-2xl font-bold text-white mb-2">NWR Maintenance Portal</h1>
               <p className="text-noaa-sky text-sm">EHB-7 Technician Portal</p>
             </div>
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Access Password</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
                 <div className="relative">
-                  <Icon name="Lock" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Icon name="Mail" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Enter portal password"
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="your-email@noaa.gov"
                     className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
                     autoFocus
                     required
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                <div className="relative">
+                  <Icon name="Lock" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                    required
+                  />
+                </div>
+              </div>
               <button
                 type="submit"
-                className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                disabled={loggingIn}
+                className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Icon name="LogIn" className="w-5 h-5" />
-                Access Portal
+                {loggingIn ? (
+                  <>
+                    <Icon name="Loader2" className="w-5 h-5 animate-spin" />
+                    Signing In...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="LogIn" className="w-5 h-5" />
+                    Sign In
+                  </>
+                )}
               </button>
             </form>
             <p className="text-xs text-slate-500 text-center mt-6">
