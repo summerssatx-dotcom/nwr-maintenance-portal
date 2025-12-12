@@ -43,6 +43,25 @@
       filter: invert(1) brightness(1.2);
       cursor: pointer;
     }
+    /* Responsive NWR Logo */
+    .nwr-logo {
+      height: 80px;
+      width: auto;
+      max-width: 200px;
+      object-fit: contain;
+    }
+    @media (max-width: 768px) {
+      .nwr-logo {
+        height: 60px;
+        max-width: 150px;
+      }
+    }
+    @media (max-width: 480px) {
+      .nwr-logo {
+        height: 50px;
+        max-width: 120px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -3483,8 +3502,14 @@
               
               <div className="relative max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/95 rounded-2xl flex items-center justify-center shadow-2xl shadow-noaa-blue/40 border-2 border-noaa-cyan/40">
-                    <Icon name="Radio" className="w-8 h-8 text-noaa-blue" />
+                  {/* NOAA NWR Logo */}
+                  <div className="flex items-center">
+                    <img
+                      src="./NWR.png"
+                      alt="NOAA All Hazards Weather Radio Logo"
+                      className="nwr-logo drop-shadow-2xl"
+                      style={{filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))'}}
+                    />
                   </div>
                   <div>
                     <h1 className="font-black text-white text-3xl tracking-tight drop-shadow-lg" style={{textShadow: '0 2px 12px rgba(0,0,0,0.6)'}}>
