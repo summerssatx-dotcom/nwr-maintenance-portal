@@ -2197,154 +2197,49 @@
       );
     };
 
-    // Analytics & Trend Analysis
+    // Analytics & Site Health
     const Analytics = () => {
       const [inspections, setInspections] = useState([]);
-      const [allInspections, setAllInspections] = useState([]); // For site health check
       const [loading, setLoading] = useState(true);
-      const [timeRange, setTimeRange] = useState('30'); // days
-      const [selectedChartSite, setSelectedChartSite] = useState('average'); // For trend charts
-      const [selectedMetric, setSelectedMetric] = useState('frequency'); // frequency, forward, reflected
+      const [siteStatuses, setSiteStatuses] = useState({});
+      const [selectedSite, setSelectedSite] = useState(null);
 
+      // Load site statuses from Firebase
       useEffect(() => {
-        const fetchInspections = async () => {
-          try {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
-
-            const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data')
-              .collection('inspections').orderBy('timestamp', 'desc').get();
-
-            const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const filtered = all.filter(d => new Date(d.timestamp) >= cutoff);
-
-            setAllInspections(all); // For site health dashboard (needs all history)
-            setInspections(filtered); // For trend charts (time-filtered)
-            setLoading(false);
-          } catch (e) {
-            console.error('Error fetching inspections:', e);
-            alert('⚠️ Error loading inspection data');
-            setLoading(false);
-          }
-        };
-
-        fetchInspections();
-
         const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
-          .collection('inspections').onSnapshot(
-            () => fetchInspections(),
-            (error) => console.error('Real-time update error:', error)
-          );
+          .collection('site_status')
+          .onSnapshot(snapshot => {
+            const statuses = {};
+            snapshot.docs.forEach(doc => {
+              statuses[doc.id] = doc.data().status || 'online';
+            });
+            setSiteStatuses(statuses);
+          }, error => {
+            console.error('Error loading site statuses:', error);
+          });
 
         return () => unsubscribe();
-      }, [timeRange]);
+      }, []);
 
-      // Helper: Get site name
-      const getSiteName = (siteId) => {
-        const site = SITES.find(s => s.id === siteId);
-        return site ? site.name : siteId;
+      // Load inspections
+      useEffect(() => {
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections')
+          .orderBy('timestamp', 'desc')
+          .onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setInspections(data);
+            setLoading(false);
+          }, error => {
+            console.error('Error fetching inspections:', error);
+            setLoading(false);
+          });
+        return () => unsubscribe();
+      }, []);
+
+      const getLatestInspection = (siteId) => {
+        return inspections.find(i => i.siteId === siteId);
       };
-
-      // Helper: Get days since last inspection
-      const getDaysSince = (timestamp) => {
-        const now = new Date();
-        const then = new Date(timestamp);
-        return Math.floor((now - then) / (1000 * 60 * 60 * 24));
-      };
-
-      // Helper: Check if reflected power is within spec (≤3% of forward power)
-      const isReflectedPowerOK = (fwd, refl) => {
-        if (!fwd || !refl) return true; // Can't determine if no data
-        const fwdNum = parseFloat(fwd);
-        const reflNum = parseFloat(refl);
-        if (isNaN(fwdNum) || isNaN(reflNum)) return true;
-        return reflNum <= (fwdNum * 0.03);
-      };
-
-      // Get latest inspection for each site
-      const siteHealthData = SITES.map(site => {
-        const siteInspections = allInspections.filter(i => i.siteId === site.id);
-        if (siteInspections.length === 0) {
-          return {
-            siteId: site.id,
-            siteName: site.name,
-            lastInspection: null,
-            daysSince: null,
-            tx1FreqOK: null,
-            tx2FreqOK: null,
-            tx1PowerOK: null,
-            tx2PowerOK: null
-          };
-        }
-
-        const latest = siteInspections[0]; // Already sorted by timestamp desc
-        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
-        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
-
-        return {
-          siteId: site.id,
-          siteName: site.name,
-          lastInspection: latest.timestamp,
-          daysSince: getDaysSince(latest.timestamp),
-          tx1FreqOK: freq1 <= 200,
-          tx2FreqOK: freq2 <= 200,
-          tx1PowerOK: isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl),
-          tx2PowerOK: isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl),
-          latestInspection: latest
-        };
-      });
-
-      // Red flags: issues that need attention (excluding overdue/never-inspected)
-      const redFlags = [];
-
-      // Check each site's latest inspection for technical issues only
-      siteHealthData.forEach(site => {
-        if (!site.latestInspection) {
-          return; // Skip sites without inspections
-        }
-
-        const latest = site.latestInspection;
-
-        // Frequency errors
-        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
-        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
-        if (freq1 > 200) {
-          redFlags.push({
-            type: 'frequency',
-            site: site.siteName,
-            message: `${site.siteName} TX1 - Frequency Error: ${freq1.toFixed(0)} Hz (threshold: 200 Hz)`
-          });
-        }
-        if (freq2 > 200) {
-          redFlags.push({
-            type: 'frequency',
-            site: site.siteName,
-            message: `${site.siteName} TX2 - Frequency Error: ${freq2.toFixed(0)} Hz (threshold: 200 Hz)`
-          });
-        }
-
-        // Reflected power
-        if (!isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl)) {
-          const fwd = parseFloat(latest.tx1_ext_fwd);
-          const refl = parseFloat(latest.tx1_ext_refl);
-          const pct = ((refl / fwd) * 100).toFixed(1);
-          redFlags.push({
-            type: 'power',
-            site: site.siteName,
-            message: `${site.siteName} TX1 - Reflected Power: ${pct}% (threshold: 3%)`
-          });
-        }
-        if (!isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl)) {
-          const fwd = parseFloat(latest.tx2_ext_fwd);
-          const refl = parseFloat(latest.tx2_ext_refl);
-          const pct = ((refl / fwd) * 100).toFixed(1);
-          redFlags.push({
-            type: 'power',
-            site: site.siteName,
-            message: `${site.siteName} TX2 - Reflected Power: ${pct}% (threshold: 3%)`
-          });
-        }
-      });
 
       const exportCSV = () => {
         if (!inspections.length) return alert('No data to export');
@@ -2382,63 +2277,10 @@
         URL.revokeObjectURL(url);
       };
 
-      // Prepare trend chart data based on selected site
-      const getTrendChartData = (metric) => {
-        if (selectedChartSite === 'average') {
-          // Calculate site averages for each inspection date
-          const grouped = {};
-          inspections.forEach(i => {
-            const date = i.timestamp;
-            if (!grouped[date]) grouped[date] = { date, tx1Values: [], tx2Values: [] };
-
-            if (metric === 'frequency') {
-              const v1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
-              const v2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
-              grouped[date].tx1Values.push(v1);
-              grouped[date].tx2Values.push(v2);
-            } else if (metric === 'forward') {
-              const v1 = parseFloat(i.tx1_ext_fwd) || 0;
-              const v2 = parseFloat(i.tx2_ext_fwd) || 0;
-              grouped[date].tx1Values.push(v1);
-              grouped[date].tx2Values.push(v2);
-            } else if (metric === 'reflected') {
-              const v1 = parseFloat(i.tx1_ext_refl) || 0;
-              const v2 = parseFloat(i.tx2_ext_refl) || 0;
-              grouped[date].tx1Values.push(v1);
-              grouped[date].tx2Values.push(v2);
-            }
-          });
-
-          return Object.values(grouped).map(g => ({
-            date: g.date,
-            tx1Avg: g.tx1Values.length > 0 ? g.tx1Values.reduce((a, b) => a + b, 0) / g.tx1Values.length : 0,
-            tx2Avg: g.tx2Values.length > 0 ? g.tx2Values.reduce((a, b) => a + b, 0) / g.tx2Values.length : 0
-          }));
-        } else {
-          // Individual site data
-          const siteInspections = inspections.filter(i => i.siteId === selectedChartSite);
-          return siteInspections.map(i => {
-            if (metric === 'frequency') {
-              return {
-                date: i.timestamp,
-                tx1: Math.abs(parseFloat(i.tx1_freq_error) || 0),
-                tx2: Math.abs(parseFloat(i.tx2_freq_error) || 0)
-              };
-            } else if (metric === 'forward') {
-              return {
-                date: i.timestamp,
-                tx1: parseFloat(i.tx1_ext_fwd) || 0,
-                tx2: parseFloat(i.tx2_ext_fwd) || 0
-              };
-            } else if (metric === 'reflected') {
-              return {
-                date: i.timestamp,
-                tx1: parseFloat(i.tx1_ext_refl) || 0,
-                tx2: parseFloat(i.tx2_ext_refl) || 0
-              };
-            }
-          });
-        }
+      const statusConfig = {
+        online: { emoji: '😊', color: 'text-emerald-400', bg: 'from-emerald-500/20 to-emerald-600/10', border: 'border-emerald-500/40' },
+        degraded: { emoji: '😐', color: 'text-amber-400', bg: 'from-amber-500/20 to-amber-600/10', border: 'border-amber-500/40' },
+        offline: { emoji: '😢', color: 'text-red-400', bg: 'from-red-500/20 to-red-600/10', border: 'border-red-500/40' }
       };
 
       if (loading) {
@@ -2455,222 +2297,190 @@
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Icon name="BarChart3" className="w-6 h-6 text-noaa-sky" /> Analytics & Site Health
+                <Icon name="Activity" className="w-6 h-6 text-noaa-sky" /> Site Status Overview
               </h2>
-              <p className="text-sm text-slate-400 mt-1">Monitor critical metrics and site performance</p>
+              <p className="text-sm text-slate-400 mt-1">Click any site to view detailed health metrics</p>
             </div>
-            <div className="flex gap-3">
-              <button onClick={exportCSV}
-                className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
-                <Icon name="Download" className="w-4 h-4" /> Export CSV
-              </button>
-            </div>
+            <button onClick={exportCSV}
+              className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
+              <Icon name="Download" className="w-4 h-4" /> Export CSV
+            </button>
           </div>
 
-          {/* Time Range Filter */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-            <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Trend Chart Time Range</label>
-            <select value={timeRange} onChange={e => setTimeRange(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="90">Last 90 Days</option>
-              <option value="365">Last Year</option>
-            </select>
-          </div>
+          {/* 12 Site Status Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {SITES.map(site => {
+              const status = siteStatuses[site.id] || 'online';
+              const config = statusConfig[status];
 
-          {/* Red Flags Section */}
-          {redFlags.length > 0 && (
-            <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/40 rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Icon name="AlertTriangle" className="w-6 h-6 text-red-400" />
-                <h3 className="text-lg font-bold text-white">Red Flags - Needs Attention</h3>
-                <span className="ml-auto px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-bold">
-                  {redFlags.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {redFlags.map((flag, idx) => (
-                  <div key={idx} className="flex items-start gap-3 bg-slate-900/50 rounded-lg p-3 border border-red-500/20">
-                    <Icon
-                      name={flag.type === 'overdue' || flag.type === 'never-inspected' ? 'Clock' : flag.type === 'frequency' ? 'Radio' : 'Zap'}
-                      className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
-                    />
-                    <p className="text-sm text-slate-200">{flag.message}</p>
+              return (
+                <div
+                  key={site.id}
+                  onClick={() => setSelectedSite(site.id)}
+                  className={`bg-gradient-to-br ${config.bg} border ${config.border} rounded-xl p-6 cursor-pointer hover:scale-105 transition-transform duration-200`}
+                >
+                  <div className="text-center">
+                    <div className="text-7xl mb-4">{config.emoji}</div>
+                    <h3 className="font-bold text-white text-lg mb-1">{site.name}</h3>
+                    <p className="text-sm font-mono text-slate-400">{site.call}</p>
+                    <p className={`text-xs font-semibold ${config.color} mt-2 uppercase`}>
+                      {status === 'offline' ? 'Not Operational' : status}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
 
-          {/* All Clear Message */}
-          {redFlags.length === 0 && (
-            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/40 rounded-xl p-6">
-              <div className="flex items-center gap-3">
-                <Icon name="CheckCircle" className="w-6 h-6 text-emerald-400" />
-                <h3 className="text-lg font-bold text-white">All Systems Normal</h3>
-              </div>
-              <p className="text-sm text-slate-300 mt-2">No critical issues detected. All sites within acceptable parameters.</p>
-            </div>
-          )}
+          {/* Site Health Detail Modal */}
+          {selectedSite && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedSite(null)}>
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                {/* Modal Header */}
+                <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex justify-between items-center z-10">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <Icon name="Activity" className="w-6 h-6 text-noaa-sky" />
+                      {SITES.find(s => s.id === selectedSite)?.name} - Health Metrics
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-1">
+                      {SITES.find(s => s.id === selectedSite)?.call}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedSite(null)}
+                    className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    <Icon name="X" className="w-6 h-6 text-slate-400" />
+                  </button>
+                </div>
 
-          {/* Site Health Dashboard */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Icon name="Activity" className="w-5 h-5 text-noaa-sky" /> Site Health Dashboard
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Last Inspected</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Freq</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Freq</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Power</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Power</th>
-                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Overall</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {siteHealthData.map(site => {
-                    const hasIssue = site.tx1FreqOK === false || site.tx2FreqOK === false ||
-                                     site.tx1PowerOK === false || site.tx2PowerOK === false;
+                {/* Modal Content */}
+                <div className="p-6 space-y-6">
+                  {(() => {
+                    const latestInspection = getLatestInspection(selectedSite);
+                    const site = SITES.find(s => s.id === selectedSite);
+                    const status = siteStatuses[selectedSite] || 'online';
+                    const config = statusConfig[status];
+
+                    if (!latestInspection) {
+                      return (
+                        <div className="text-center py-12">
+                          <Icon name="FileText" className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                          <p className="text-slate-400">No inspection data available for this site</p>
+                        </div>
+                      );
+                    }
+
+                    const freq1 = Math.abs(parseFloat(latestInspection.tx1_freq_error) || 0);
+                    const freq2 = Math.abs(parseFloat(latestInspection.tx2_freq_error) || 0);
+                    const fwd1 = parseFloat(latestInspection.tx1_ext_fwd) || 0;
+                    const fwd2 = parseFloat(latestInspection.tx2_ext_fwd) || 0;
+                    const refl1 = parseFloat(latestInspection.tx1_ext_refl) || 0;
+                    const refl2 = parseFloat(latestInspection.tx2_ext_refl) || 0;
+                    const refl1Pct = fwd1 > 0 ? ((refl1 / fwd1) * 100) : 0;
+                    const refl2Pct = fwd2 > 0 ? ((refl2 / fwd2) * 100) : 0;
+
                     return (
-                      <tr key={site.siteId} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                        <td className="py-2 px-3 text-white font-medium">{site.siteName}</td>
-                        <td className="py-2 px-3 text-center">
-                          {site.daysSince === null ? (
-                            <span className="text-slate-500 text-xs">Never</span>
-                          ) : (
-                            <span className={`text-xs font-mono ${site.daysSince > 7 ? 'text-red-400' : 'text-slate-300'}`}>
-                              {site.daysSince}d ago
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {site.tx1FreqOK === null ? (
-                            <span className="text-slate-500">—</span>
-                          ) : site.tx1FreqOK ? (
-                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
-                          ) : (
-                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {site.tx2FreqOK === null ? (
-                            <span className="text-slate-500">—</span>
-                          ) : site.tx2FreqOK ? (
-                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
-                          ) : (
-                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {site.tx1PowerOK === null ? (
-                            <span className="text-slate-500">—</span>
-                          ) : site.tx1PowerOK ? (
-                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
-                          ) : (
-                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {site.tx2PowerOK === null ? (
-                            <span className="text-slate-500">—</span>
-                          ) : site.tx2PowerOK ? (
-                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
-                          ) : (
-                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {site.daysSince === null ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/50 text-slate-400 rounded-full text-xs font-medium">
-                              <Icon name="HelpCircle" className="w-3 h-3" /> No Data
-                            </span>
-                          ) : hasIssue ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
-                              <Icon name="AlertTriangle" className="w-3 h-3" /> Issue
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
-                              <Icon name="CheckCircle" className="w-3 h-3" /> Good
-                            </span>
-                          )}
-                        </td>
-                      </tr>
+                      <>
+                        {/* Current Status */}
+                        <div className={`bg-gradient-to-br ${config.bg} border ${config.border} rounded-xl p-6 text-center`}>
+                          <div className="text-6xl mb-3">{config.emoji}</div>
+                          <h3 className={`text-2xl font-bold ${config.color} uppercase`}>
+                            {status === 'offline' ? 'Not Operational' : status}
+                          </h3>
+                        </div>
+
+                        {/* Last Inspection Info */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Calendar" className="w-4 h-4 text-noaa-sky" /> Latest Inspection
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-slate-500">Date</p>
+                              <p className="text-white">{latestInspection.date}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Technician</p>
+                              <p className="text-white">{latestInspection.tech || latestInspection.techId}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Frequency Error */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Radio" className="w-4 h-4 text-cyan-400" /> Frequency Error
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-cyan-400 font-bold mb-1">TX1</p>
+                              <p className={`text-2xl font-mono ${freq1 > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {freq1.toFixed(1)} Hz
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">Threshold: 200 Hz</p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-cyan-400 font-bold mb-1">TX2</p>
+                              <p className={`text-2xl font-mono ${freq2 > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {freq2.toFixed(1)} Hz
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">Threshold: 200 Hz</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Forward Power */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Zap" className="w-4 h-4 text-amber-400" /> Forward Power
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-amber-400 font-bold mb-1">TX1</p>
+                              <p className="text-2xl font-mono text-white">{fwd1.toFixed(1)} W</p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-amber-400 font-bold mb-1">TX2</p>
+                              <p className="text-2xl font-mono text-white">{fwd2.toFixed(1)} W</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reflected Power */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="AlertCircle" className="w-4 h-4 text-red-400" /> Reflected Power
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-red-400 font-bold mb-1">TX1</p>
+                              <p className={`text-2xl font-mono ${refl1Pct > 3 ? 'text-red-400' : 'text-white'}`}>
+                                {refl1.toFixed(1)} W
+                              </p>
+                              <p className={`text-xs mt-1 ${refl1Pct > 3 ? 'text-red-400' : 'text-slate-500'}`}>
+                                {refl1Pct.toFixed(1)}% of forward (threshold: 3%)
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-red-400 font-bold mb-1">TX2</p>
+                              <p className={`text-2xl font-mono ${refl2Pct > 3 ? 'text-red-400' : 'text-white'}`}>
+                                {refl2.toFixed(1)} W
+                              </p>
+                              <p className={`text-xs mt-1 ${refl2Pct > 3 ? 'text-red-400' : 'text-slate-500'}`}>
+                                {refl2Pct.toFixed(1)}% of forward (threshold: 3%)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Consolidated Trend Chart */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Icon
-                  name={selectedMetric === 'frequency' ? 'Radio' : selectedMetric === 'forward' ? 'Zap' : 'AlertCircle'}
-                  className={`w-5 h-5 ${selectedMetric === 'frequency' ? 'text-cyan-400' : selectedMetric === 'forward' ? 'text-amber-400' : 'text-red-400'}`}
-                />
-                {selectedMetric === 'frequency' ? 'Frequency Error' : selectedMetric === 'forward' ? 'Forward Power' : 'Reflected Power'} Trend
-              </h3>
-              <div className="flex gap-2">
-                <select value={selectedMetric} onChange={e => setSelectedMetric(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
-                  <option value="frequency">Frequency Error</option>
-                  <option value="forward">Forward Power</option>
-                  <option value="reflected">Reflected Power</option>
-                </select>
-                <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
-                  <option value="average">All Sites Average</option>
-                  {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                  })()}
+                </div>
               </div>
             </div>
-            {inspections.length > 0 ? (
-              <div className="space-y-4">
-                {getTrendChartData(selectedMetric).map((dataPoint, idx) => {
-                  const isAverage = selectedChartSite === 'average';
-                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
-                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
-                  const unit = selectedMetric === 'frequency' ? 'Hz' : 'W';
-                  const threshold = selectedMetric === 'frequency' ? 200 : null;
-                  const colorClass = selectedMetric === 'frequency' ? 'text-cyan-400' : selectedMetric === 'forward' ? 'text-amber-400' : 'text-red-400';
-
-                  return (
-                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
-                      <p className="text-xs text-slate-400 font-mono mb-2">
-                        {new Date(dataPoint.date).toLocaleDateString()}
-                      </p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-900/50 rounded-lg p-3">
-                          <p className={`text-xs font-bold ${colorClass} mb-1`}>{isAverage ? 'TX1 Avg' : 'TX1'}</p>
-                          <p className={`text-lg font-mono ${threshold && tx1Val > threshold ? 'text-red-400' : threshold ? 'text-emerald-400' : 'text-white'}`}>
-                            {tx1Val.toFixed(1)} {unit}
-                          </p>
-                        </div>
-                        <div className="bg-slate-900/50 rounded-lg p-3">
-                          <p className={`text-xs font-bold ${colorClass} mb-1`}>{isAverage ? 'TX2 Avg' : 'TX2'}</p>
-                          <p className={`text-lg font-mono ${threshold && tx2Val > threshold ? 'text-red-400' : threshold ? 'text-emerald-400' : 'text-white'}`}>
-                            {tx2Val.toFixed(1)} {unit}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400">No data available for selected time range</p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       );
     };
