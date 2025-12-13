@@ -2774,6 +2774,7 @@
       const [expanded, setExpanded] = useState({});
       const [siteStatuses, setSiteStatuses] = useState({});
       const [siteRemarks, setSiteRemarks] = useState({});
+      const [pendingChanges, setPendingChanges] = useState({});
       const [loading, setLoading] = useState(true);
 
       // Load site statuses from Firebase
@@ -2808,39 +2809,54 @@
         return () => unsubscribe();
       }, []);
 
-      const updateSiteStatus = async (siteId, newStatus) => {
-        // Validate remarks if status is degraded or offline
-        const currentRemarks = siteRemarks[siteId] || '';
-        if ((newStatus === 'degraded' || newStatus === 'offline') && !currentRemarks.trim()) {
-          alert('Please provide remarks explaining why the site is ' + (newStatus === 'offline' ? 'offline' : 'degraded') + '.');
+      const handleStatusChange = (siteId, newStatus) => {
+        // If changing to online, save immediately (no remarks needed)
+        if (newStatus === 'online') {
+          saveStatusAndRemarks(siteId, newStatus, '');
+        } else {
+          // For degraded/offline, mark as pending and show remarks field
+          setPendingChanges(prev => ({ ...prev, [siteId]: { status: newStatus, remarks: siteRemarks[siteId] || '' } }));
+        }
+      };
+
+      const handleRemarksChange = (siteId, newRemarks) => {
+        setPendingChanges(prev => ({
+          ...prev,
+          [siteId]: { ...prev[siteId], remarks: newRemarks }
+        }));
+      };
+
+      const saveStatusAndRemarks = async (siteId, status, remarks) => {
+        // Validate remarks for degraded/offline
+        if ((status === 'degraded' || status === 'offline') && !remarks.trim()) {
+          alert('Please provide remarks explaining why the site is ' + (status === 'offline' ? 'offline' : 'degraded') + '.');
           return;
         }
 
         try {
           await db.collection('artifacts').doc(appId).collection('public').doc('data')
             .collection('site_statuses').doc(siteId).set({
-              status: newStatus,
-              remarks: currentRemarks
+              status: status,
+              remarks: remarks
             });
+          // Clear pending changes after successful save
+          setPendingChanges(prev => {
+            const updated = { ...prev };
+            delete updated[siteId];
+            return updated;
+          });
         } catch (error) {
           console.error('Error updating site status:', error);
           alert('Failed to update site status. Please try again.');
         }
       };
 
-      const updateSiteRemarks = async (siteId, newRemarks) => {
-        setSiteRemarks(prev => ({ ...prev, [siteId]: newRemarks }));
-
-        try {
-          const status = siteStatuses[siteId] || 'online';
-          await db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('site_statuses').doc(siteId).set({
-              status: status,
-              remarks: newRemarks
-            });
-        } catch (error) {
-          console.error('Error updating site remarks:', error);
-        }
+      const cancelStatusChange = (siteId) => {
+        setPendingChanges(prev => {
+          const updated = { ...prev };
+          delete updated[siteId];
+          return updated;
+        });
       };
 
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
@@ -2909,8 +2925,10 @@
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(s => {
-              const status = siteStatuses[s.id] || 'online';
-              const statusInfo = statusConfig[status];
+              const savedStatus = siteStatuses[s.id] || 'online';
+              const hasPendingChange = !!pendingChanges[s.id];
+              const displayStatus = hasPendingChange ? pendingChanges[s.id].status : savedStatus;
+              const statusInfo = statusConfig[displayStatus];
               return (
               <div key={s.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600/50 transition-all">
                 <div className="flex justify-between mb-3">
@@ -2919,8 +2937,11 @@
                       <h3 className="font-bold text-white text-lg">{s.name}</h3>
                       <div className="relative">
                         <div className={`w-2 h-2 rounded-full ${statusInfo.dotColor}`} />
-                        {status === 'online' && <div className={`absolute inset-0 w-2 h-2 rounded-full ${statusInfo.dotColor} animate-ping opacity-50`} />}
+                        {displayStatus === 'online' && !hasPendingChange && <div className={`absolute inset-0 w-2 h-2 rounded-full ${statusInfo.dotColor} animate-ping opacity-50`} />}
                       </div>
+                      {hasPendingChange && (
+                        <span className="text-xs text-amber-400 font-semibold">● Unsaved</span>
+                      )}
                     </div>
                     <p className="text-noaa-sky font-mono text-sm">{s.call}</p>
                   </div>
@@ -2940,8 +2961,8 @@
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500">Status</span>
                     <select
-                      value={status}
-                      onChange={(e) => updateSiteStatus(s.id, e.target.value)}
+                      value={displayStatus}
+                      onChange={(e) => handleStatusChange(s.id, e.target.value)}
                       className={`${statusInfo.color} text-xs font-medium bg-slate-900 border border-slate-700 rounded px-2 py-1 cursor-pointer hover:border-slate-600 outline-none`}
                     >
                       <option value="online">● Online</option>
@@ -2951,18 +2972,40 @@
                   </div>
 
                   {/* Remarks field for Degraded/Offline status */}
-                  {(status === 'degraded' || status === 'offline') && (
-                    <div className="mt-2">
-                      <label className="text-slate-500 text-xs block mb-1">
+                  {hasPendingChange && (displayStatus === 'degraded' || displayStatus === 'offline') && (
+                    <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-2">
+                      <label className="text-slate-500 text-xs block">
                         Remarks <span className="text-red-400">*</span>
                       </label>
                       <textarea
-                        value={siteRemarks[s.id] || ''}
-                        onChange={(e) => updateSiteRemarks(s.id, e.target.value)}
-                        placeholder={`Explain why the site is ${status}...`}
-                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white placeholder-slate-600 outline-none focus:border-noaa-sky resize-none"
+                        value={pendingChanges[s.id]?.remarks || ''}
+                        onChange={(e) => handleRemarksChange(s.id, e.target.value)}
+                        placeholder={`Explain why the site is ${displayStatus}...`}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:border-noaa-sky resize-none"
                         rows="2"
                       />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => saveStatusAndRemarks(s.id, pendingChanges[s.id].status, pendingChanges[s.id].remarks)}
+                          className="flex-1 px-3 py-1.5 bg-noaa-sky hover:bg-noaa-light text-white text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => cancelStatusChange(s.id)}
+                          className="flex-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show saved remarks for degraded/offline (when not editing) */}
+                  {!hasPendingChange && (savedStatus === 'degraded' || savedStatus === 'offline') && siteRemarks[s.id] && (
+                    <div className="mt-2 pt-2 border-t border-slate-700/50">
+                      <p className="text-slate-500 text-xs mb-1">Remarks:</p>
+                      <p className="text-slate-300 text-xs italic">{siteRemarks[s.id]}</p>
                     </div>
                   )}
                 </div>
