@@ -8,10 +8,11 @@ service cloud.firestore {
     // ============================================================================
     //
     // IMPORTANT: Deploy these rules to Firebase Console
-    // Current State: Anonymous authentication with basic validation
+    // Current State: Email/Password authentication with Firebase Auth
+    // Access control: Admin vs Viewer roles stored in user_roles collection
     // ============================================================================
 
-    // Helper function: Check if user is authenticated (even anonymously)
+    // Helper function: Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -63,17 +64,56 @@ service cloud.firestore {
           allow update, delete: if isAuthenticated() &&
                                    isOwner(resource.data.userId);
         }
+
+        // Calendar events subcollection (shared team calendar)
+        match /calendar_events/{eventId} {
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
+
+        // Site statuses subcollection (shared team data)
+        match /site_statuses/{siteId} {
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
+
+        // Maintenance log subcollection (shared team log)
+        match /maintenance_log/{logId} {
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
+
+        // User roles subcollection (for future use)
+        match /user_roles/{userId} {
+          // Allow read/write access to authenticated users
+          allow read, write: if isAuthenticated();
+        }
+
+        // Parts on order subcollection (shared team resource)
+        match /parts/{partId} {
+          // Allow read/write access to all authenticated users
+          // Access control handled by password system (admin vs viewer)
+          allow read, write: if isAuthenticated();
+        }
       }
     }
 
     // ============================================================================
-    // PRODUCTION SECURITY RECOMMENDATIONS:
+    // IMPLEMENTED SECURITY FEATURES:
     // ============================================================================
-    // 1. Replace anonymous authentication with proper user accounts
-    // 2. Implement role-based access control (admin, technician, viewer)
-    // 3. Add field-level validation for all data types
-    // 4. Implement rate limiting to prevent abuse
-    // 5. Add audit logging for all write operations
+    // ✅ 1. Email/Password authentication via Firebase Auth
+    // ✅ 2. Role-based access (admin vs viewer) stored in user_roles collection
+    // ✅ 3. Per-user authentication with unique accounts
+    //
+    // FUTURE ENHANCEMENTS:
+    // ============================================================================
+    // 1. Enforce role-based access in Firestore rules (not just UI)
+    // 2. Add field-level validation for all data types
+    // 3. Implement rate limiting to prevent abuse
+    // 4. Add audit logging for all write operations
     // ============================================================================
 
     // Deny all other access by default

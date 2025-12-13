@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -41,6 +42,25 @@
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(1) brightness(1.2);
       cursor: pointer;
+    }
+    /* Responsive NWR Logo */
+    .nwr-logo {
+      height: 80px;
+      width: auto;
+      max-width: 200px;
+      object-fit: contain;
+    }
+    @media (max-width: 768px) {
+      .nwr-logo {
+        height: 60px;
+        max-width: 150px;
+      }
+    }
+    @media (max-width: 480px) {
+      .nwr-logo {
+        height: 50px;
+        max-width: 120px;
+      }
     }
   </style>
 </head>
@@ -80,7 +100,15 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
+    const storage = firebase.storage();
     const appId = 'nwr-maintenance-v2';
+
+    // ============================================================================
+    // AUTHENTICATION CONFIGURATION
+    // ============================================================================
+    // Using Firebase Email/Password authentication
+    // User roles stored in Firestore: artifacts/{appId}/public/data/user_roles/{uid}
+    // ============================================================================
 
     // Icons Component
     const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -385,17 +413,25 @@
       const [showAdd, setShowAdd] = useState(false);
       const [newPart, setNewPart] = useState({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
 
+      // Load parts from Firebase
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-parts-tracker');
-        if (saved) setParts(JSON.parse(saved));
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('parts')
+          .orderBy('addedDate', 'desc')
+          .onSnapshot(snapshot => {
+            const loadedParts = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setParts(loadedParts);
+          }, error => {
+            console.error('Error loading parts:', error);
+          });
+
+        return () => unsubscribe();
       }, []);
 
-      const saveParts = (updated) => {
-        setParts(updated);
-        localStorage.setItem('nwr-parts-tracker', JSON.stringify(updated));
-      };
-
-      const addPart = () => {
+      const addPart = async () => {
         // Input validation
         if (!newPart.name || newPart.name.trim().length === 0) {
           alert('⚠️ Please enter part name');
@@ -411,10 +447,12 @@
             ...newPart,
             name: newPart.name.trim(),
             partNum: newPart.partNum.trim(),
-            id: Date.now(),
             addedDate: new Date().toISOString()
           };
-          saveParts([...parts, part]);
+
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').add(part);
+
           setNewPart({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
           setShowAdd(false);
         } catch (error) {
@@ -423,10 +461,24 @@
         }
       };
 
-      const removePart = (id) => saveParts(parts.filter(p => p.id !== id));
+      const removePart = async (id) => {
+        try {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').doc(id).delete();
+        } catch (error) {
+          console.error('Error removing part:', error);
+          alert('❌ Error removing part. Please try again.');
+        }
+      };
 
-      const updateStatus = (id, status) => {
-        saveParts(parts.map(p => p.id === id ? { ...p, status } : p));
+      const updateStatus = async (id, status) => {
+        try {
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('parts').doc(id).update({ status });
+        } catch (error) {
+          console.error('Error updating part status:', error);
+          alert('❌ Error updating status. Please try again.');
+        }
       };
 
       const statusColor = (status) => {
@@ -804,7 +856,7 @@
       );
     };
 
-    const InspectionForm = ({ user }) => {
+    const InspectionForm = ({ user, userRole, editingInspection, setEditingInspection }) => {
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
@@ -815,6 +867,18 @@
 
       const set = useCallback((f, v) => setData(p => ({ ...p, [f]: v })), []);
       const site = SITES.find(s => s.id === data.siteId);
+
+      // Load data when editing an inspection
+      useEffect(() => {
+        if (editingInspection) {
+          setData(editingInspection);
+          // Set transmitter type states
+          if (editingInspection.txType) setTxType(editingInspection.txType);
+          if (editingInspection.isClassic !== undefined) setIsClassic(editingInspection.isClassic);
+          if (editingInspection.is1KW !== undefined) setIs1KW(editingInspection.is1KW);
+          if (editingInspection.activeTx) setActiveTx(editingInspection.activeTx);
+        }
+      }, [editingInspection]);
 
       const handleSiteChange = (id) => {
         const s = SITES.find(x => x.id === id);
@@ -836,11 +900,30 @@
 
         setSaving(true);
         try {
-          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('inspections').add({
+          const inspectionData = {
             ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-            timestamp: new Date().toISOString(), techId: user?.uid
-          });
-          alert('✓ Inspection saved successfully!');
+            techId: user?.uid
+          };
+
+          if (editingInspection && editingInspection.id) {
+            // Update existing inspection
+            const { id, ...dataToUpdate } = inspectionData;
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').doc(editingInspection.id).update({
+                ...dataToUpdate,
+                lastModified: new Date().toISOString()
+              });
+            alert('✓ Inspection updated successfully!');
+            setEditingInspection(null);
+          } else {
+            // Create new inspection
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').add({
+                ...inspectionData,
+                timestamp: new Date().toISOString()
+              });
+            alert('✓ Inspection saved successfully!');
+          }
           setStep(1); setData({}); setTxType(null);
         } catch (e) {
           console.error('Error saving inspection:', e);
@@ -2117,11 +2200,10 @@
     // Analytics & Trend Analysis
     const Analytics = () => {
       const [inspections, setInspections] = useState([]);
-      const [logEntries, setLogEntries] = useState([]);
+      const [allInspections, setAllInspections] = useState([]); // For site health check
       const [loading, setLoading] = useState(true);
       const [timeRange, setTimeRange] = useState('30'); // days
-      const [selectedSite, setSelectedSite] = useState('all');
-      const [selectedMetric, setSelectedMetric] = useState('frequency');
+      const [selectedChartSite, setSelectedChartSite] = useState('average'); // For trend charts
 
       useEffect(() => {
         const fetchInspections = async () => {
@@ -2129,143 +2211,249 @@
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
 
-            let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
-              .collection('inspections').orderBy('timestamp', 'desc');
+            const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').orderBy('timestamp', 'desc').get();
 
-            if (selectedSite !== 'all') {
-              query = query.where('siteId', '==', selectedSite);
-            }
+            const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const filtered = all.filter(d => new Date(d.timestamp) >= cutoff);
 
-            const snapshot = await query.get();
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-              .filter(d => new Date(d.timestamp) >= cutoff);
-
-            setInspections(data);
+            setAllInspections(all); // For site health dashboard (needs all history)
+            setInspections(filtered); // For trend charts (time-filtered)
+            setLoading(false);
           } catch (e) {
             console.error('Error fetching inspections:', e);
-            // Show error state to user
-            alert('⚠️ Error loading inspection data: ' + (e.message || 'Please check your connection and try again.'));
-          } finally {
+            alert('⚠️ Error loading inspection data');
             setLoading(false);
           }
         };
 
         fetchInspections();
 
-        let unsubscribe = () => {};
-        try {
-          unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('inspections').onSnapshot(
-              () => fetchInspections(),
-              (error) => console.error('Real-time update error:', error)
-            );
-        } catch (e) {
-          console.error('Error setting up real-time listener:', e);
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections').onSnapshot(
+            () => fetchInspections(),
+            (error) => console.error('Real-time update error:', error)
+          );
+
+        return () => unsubscribe();
+      }, [timeRange]);
+
+      // Helper: Get site name
+      const getSiteName = (siteId) => {
+        const site = SITES.find(s => s.id === siteId);
+        return site ? site.name : siteId;
+      };
+
+      // Helper: Get days since last inspection
+      const getDaysSince = (timestamp) => {
+        const now = new Date();
+        const then = new Date(timestamp);
+        return Math.floor((now - then) / (1000 * 60 * 60 * 24));
+      };
+
+      // Helper: Check if reflected power is within spec (≤3% of forward power)
+      const isReflectedPowerOK = (fwd, refl) => {
+        if (!fwd || !refl) return true; // Can't determine if no data
+        const fwdNum = parseFloat(fwd);
+        const reflNum = parseFloat(refl);
+        if (isNaN(fwdNum) || isNaN(reflNum)) return true;
+        return reflNum <= (fwdNum * 0.03);
+      };
+
+      // Get latest inspection for each site
+      const siteHealthData = SITES.map(site => {
+        const siteInspections = allInspections.filter(i => i.siteId === site.id);
+        if (siteInspections.length === 0) {
+          return {
+            siteId: site.id,
+            siteName: site.name,
+            lastInspection: null,
+            daysSince: null,
+            tx1FreqOK: null,
+            tx2FreqOK: null,
+            tx1PowerOK: null,
+            tx2PowerOK: null
+          };
         }
 
-        return () => unsubscribe();
-      }, [timeRange, selectedSite]);
+        const latest = siteInspections[0]; // Already sorted by timestamp desc
+        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
+        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
 
-      // Load and filter maintenance log entries from Firebase
-      useEffect(() => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
+        return {
+          siteId: site.id,
+          siteName: site.name,
+          lastInspection: latest.timestamp,
+          daysSince: getDaysSince(latest.timestamp),
+          tx1FreqOK: freq1 <= 200,
+          tx2FreqOK: freq2 <= 200,
+          tx1PowerOK: isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl),
+          tx2PowerOK: isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl),
+          latestInspection: latest
+        };
+      });
 
-        let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
-          .collection('maintenance_log')
-          .orderBy('timestamp', 'desc');
+      // Red flags: issues that need attention
+      const redFlags = [];
 
-        const unsubscribe = query.onSnapshot(snapshot => {
-          let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          // Filter by date range
-          data = data.filter(log => new Date(log.timestamp) >= cutoff);
-
-          // Filter by site if specified
-          if (selectedSite !== 'all') {
-            data = data.filter(log => log.siteId === selectedSite);
+      // Check each site's latest inspection
+      siteHealthData.forEach(site => {
+        if (!site.latestInspection) {
+          if (site.daysSince === null) {
+            redFlags.push({
+              type: 'never-inspected',
+              site: site.siteName,
+              message: `${site.siteName} - Never inspected`
+            });
           }
+          return;
+        }
 
-          setLogEntries(data);
-        }, error => {
-          console.error('Error loading maintenance log:', error);
-          setLogEntries([]);
-        });
+        const latest = site.latestInspection;
 
-        return () => unsubscribe();
-      }, [timeRange, selectedSite]);
+        // Overdue (>7 days)
+        if (site.daysSince > 7) {
+          redFlags.push({
+            type: 'overdue',
+            site: site.siteName,
+            message: `${site.siteName} - Not inspected in ${site.daysSince} days`
+          });
+        }
+
+        // Frequency errors
+        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
+        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
+        if (freq1 > 200) {
+          redFlags.push({
+            type: 'frequency',
+            site: site.siteName,
+            message: `${site.siteName} TX1 - Frequency Error: ${freq1.toFixed(0)} Hz (threshold: 200 Hz)`
+          });
+        }
+        if (freq2 > 200) {
+          redFlags.push({
+            type: 'frequency',
+            site: site.siteName,
+            message: `${site.siteName} TX2 - Frequency Error: ${freq2.toFixed(0)} Hz (threshold: 200 Hz)`
+          });
+        }
+
+        // Reflected power
+        if (!isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl)) {
+          const fwd = parseFloat(latest.tx1_ext_fwd);
+          const refl = parseFloat(latest.tx1_ext_refl);
+          const pct = ((refl / fwd) * 100).toFixed(1);
+          redFlags.push({
+            type: 'power',
+            site: site.siteName,
+            message: `${site.siteName} TX1 - Reflected Power: ${pct}% (threshold: 3%)`
+          });
+        }
+        if (!isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl)) {
+          const fwd = parseFloat(latest.tx2_ext_fwd);
+          const refl = parseFloat(latest.tx2_ext_refl);
+          const pct = ((refl / fwd) * 100).toFixed(1);
+          redFlags.push({
+            type: 'power',
+            site: site.siteName,
+            message: `${site.siteName} TX2 - Reflected Power: ${pct}% (threshold: 3%)`
+          });
+        }
+      });
 
       const exportCSV = () => {
-        if (!inspections.length && !logEntries.length) return alert('No data to export');
+        if (!inspections.length) return alert('No data to export');
 
-        // Helper function to escape CSV fields properly
         const escapeCSV = (field) => {
           if (field == null) return '';
           const str = String(field);
-          // If field contains comma, quote, or newline, wrap in quotes and escape existing quotes
           if (str.includes(',') || str.includes('"') || str.includes('\n')) {
             return `"${str.replace(/"/g, '""')}"`;
           }
           return str;
         };
 
-        const headers = ['Type', 'Timestamp', 'Site', 'Call Sign', 'TX Type', 'TX1 Freq Error', 'TX2 Freq Error',
-          'TX1 Modulation', 'TX2 Modulation', 'TX1 Fwd Pwr', 'TX2 Fwd Pwr', 'Remarks', 'Initials', 'Tech ID'];
+        const headers = ['Timestamp', 'Site', 'TX Type', 'TX1 Freq Error', 'TX2 Freq Error',
+          'TX1 Fwd Pwr', 'TX2 Fwd Pwr', 'TX1 Refl Pwr', 'TX2 Refl Pwr', 'Tech ID'];
 
-        const inspectionRows = inspections.map(i => [
-          'Inspection', i.timestamp, i.siteName || i.siteId, i.siteCall, i.txType,
+        const rows = inspections.map(i => [
+          i.timestamp, i.siteName || i.siteId, i.txType,
           i.tx1_freq_error || '', i.tx2_freq_error || '',
-          i.tx1_mod_deviation || '', i.tx2_mod_deviation || '',
           i.tx1_ext_fwd || '', i.tx2_ext_fwd || '',
-          '', '', i.techId || ''
+          i.tx1_ext_refl || '', i.tx2_ext_refl || '',
+          i.techId || ''
         ]);
 
-        const logRows = logEntries.map(log => [
-          'Log Entry', log.timestamp, log.siteName, log.siteCall, '', '', '', '', '', '', '',
-          log.remarks || '', log.initials || '', ''
-        ]);
-
-        // Properly escape all fields and join with commas
-        const csv = [headers, ...inspectionRows, ...logRows]
-          .map(row => row.map(escapeCSV).join(','))
-          .join('\n');
+        const csv = [headers, ...rows].map(row => row.map(escapeCSV).join(',')).join('\n');
 
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `nwr-maintenance-data-${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `nwr-analytics-${new Date().toISOString().split('T')[0]}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       };
 
-      const getMetricData = () => {
-        const metricMap = {
-          frequency: { field: 'freq_error', label: 'Frequency Error (Hz)', threshold: 200 },
-          modulation: { field: 'mod_deviation', label: 'Modulation (kHz)', threshold: null },
-          power: { field: 'ext_fwd', label: 'Forward Power (W)', threshold: null }
-        };
-        
-        const metric = metricMap[selectedMetric];
-        const data = inspections.flatMap(i => [
-          { site: i.siteName || i.siteId, date: i.timestamp, value: parseFloat(i[`tx1_${metric.field}`]), tx: 'TX1' },
-          { site: i.siteName || i.siteId, date: i.timestamp, value: parseFloat(i[`tx2_${metric.field}`]), tx: 'TX2' }
-        ]).filter(d => !isNaN(d.value));
+      // Prepare trend chart data based on selected site
+      const getTrendChartData = (metric) => {
+        if (selectedChartSite === 'average') {
+          // Calculate site averages for each inspection date
+          const grouped = {};
+          inspections.forEach(i => {
+            const date = i.timestamp;
+            if (!grouped[date]) grouped[date] = { date, tx1Values: [], tx2Values: [] };
 
-        return { data, metric };
-      };
+            if (metric === 'frequency') {
+              const v1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
+              const v2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            } else if (metric === 'forward') {
+              const v1 = parseFloat(i.tx1_ext_fwd) || 0;
+              const v2 = parseFloat(i.tx2_ext_fwd) || 0;
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            } else if (metric === 'reflected') {
+              const v1 = parseFloat(i.tx1_ext_refl) || 0;
+              const v2 = parseFloat(i.tx2_ext_refl) || 0;
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            }
+          });
 
-      const { data: metricData, metric } = getMetricData();
-
-      const stats = {
-        total: inspections.length,
-        logEntries: logEntries.length,
-        sites: [...new Set([...inspections.map(i => i.siteId), ...logEntries.map(l => l.siteId)])].length,
-        avgFreqError: inspections.length > 0 ? 
-          (inspections.reduce((sum, i) => sum + Math.abs(parseFloat(i.tx1_freq_error) || 0) + Math.abs(parseFloat(i.tx2_freq_error) || 0), 0) / (inspections.length * 2)).toFixed(1) : 0,
-        outOfSpec: inspections.filter(i => Math.abs(parseFloat(i.tx1_freq_error)) > 200 || Math.abs(parseFloat(i.tx2_freq_error)) > 200).length
+          return Object.values(grouped).map(g => ({
+            date: g.date,
+            tx1Avg: g.tx1Values.length > 0 ? g.tx1Values.reduce((a, b) => a + b, 0) / g.tx1Values.length : 0,
+            tx2Avg: g.tx2Values.length > 0 ? g.tx2Values.reduce((a, b) => a + b, 0) / g.tx2Values.length : 0
+          }));
+        } else {
+          // Individual site data
+          const siteInspections = inspections.filter(i => i.siteId === selectedChartSite);
+          return siteInspections.map(i => {
+            if (metric === 'frequency') {
+              return {
+                date: i.timestamp,
+                tx1: Math.abs(parseFloat(i.tx1_freq_error) || 0),
+                tx2: Math.abs(parseFloat(i.tx2_freq_error) || 0)
+              };
+            } else if (metric === 'forward') {
+              return {
+                date: i.timestamp,
+                tx1: parseFloat(i.tx1_ext_fwd) || 0,
+                tx2: parseFloat(i.tx2_ext_fwd) || 0
+              };
+            } else if (metric === 'reflected') {
+              return {
+                date: i.timestamp,
+                tx1: parseFloat(i.tx1_ext_refl) || 0,
+                tx2: parseFloat(i.tx2_ext_refl) || 0
+              };
+            }
+          });
+        }
       };
 
       if (loading) {
@@ -2282,137 +2470,194 @@
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Icon name="TrendingUp" className="w-6 h-6 text-noaa-sky" /> Trend Analysis
+                <Icon name="BarChart3" className="w-6 h-6 text-noaa-sky" /> Analytics & Site Health
               </h2>
-              <p className="text-sm text-slate-400 mt-1">Real-time inspection data and performance metrics</p>
+              <p className="text-sm text-slate-400 mt-1">Monitor critical metrics and site performance</p>
             </div>
-            <button onClick={exportCSV} 
-              className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
-              <Icon name="Download" className="w-4 h-4" /> Export CSV
-            </button>
+            <div className="flex gap-3">
+              <button onClick={exportCSV}
+                className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
+                <Icon name="Download" className="w-4 h-4" /> Export CSV
+              </button>
+            </div>
           </div>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Time Range</label>
-              <select value={timeRange} onChange={e => setTimeRange(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="7">Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-                <option value="365">Last Year</option>
-              </select>
+          {/* Time Range Filter */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+            <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Trend Chart Time Range</label>
+            <select value={timeRange} onChange={e => setTimeRange(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+              <option value="365">Last Year</option>
+            </select>
+          </div>
+
+          {/* Red Flags Section */}
+          {redFlags.length > 0 && (
+            <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/40 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Icon name="AlertTriangle" className="w-6 h-6 text-red-400" />
+                <h3 className="text-lg font-bold text-white">Red Flags - Needs Attention</h3>
+                <span className="ml-auto px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-bold">
+                  {redFlags.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {redFlags.map((flag, idx) => (
+                  <div key={idx} className="flex items-start gap-3 bg-slate-900/50 rounded-lg p-3 border border-red-500/20">
+                    <Icon
+                      name={flag.type === 'overdue' || flag.type === 'never-inspected' ? 'Clock' : flag.type === 'frequency' ? 'Radio' : 'Zap'}
+                      className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
+                    />
+                    <p className="text-sm text-slate-200">{flag.message}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Site Filter</label>
-              <select value={selectedSite} onChange={e => setSelectedSite(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="all">All Sites</option>
+          )}
+
+          {/* All Clear Message */}
+          {redFlags.length === 0 && (
+            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/40 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <Icon name="CheckCircle" className="w-6 h-6 text-emerald-400" />
+                <h3 className="text-lg font-bold text-white">All Systems Normal</h3>
+              </div>
+              <p className="text-sm text-slate-300 mt-2">No critical issues detected. All sites within acceptable parameters.</p>
+            </div>
+          )}
+
+          {/* Site Health Dashboard */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Icon name="Activity" className="w-5 h-5 text-noaa-sky" /> Site Health Dashboard
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Last Inspected</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Freq</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Freq</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Power</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Power</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteHealthData.map(site => {
+                    const hasIssue = site.daysSince > 7 || site.tx1FreqOK === false || site.tx2FreqOK === false ||
+                                     site.tx1PowerOK === false || site.tx2PowerOK === false;
+                    return (
+                      <tr key={site.siteId} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td className="py-2 px-3 text-white font-medium">{site.siteName}</td>
+                        <td className="py-2 px-3 text-center">
+                          {site.daysSince === null ? (
+                            <span className="text-slate-500 text-xs">Never</span>
+                          ) : (
+                            <span className={`text-xs font-mono ${site.daysSince > 7 ? 'text-red-400' : 'text-slate-300'}`}>
+                              {site.daysSince}d ago
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx1FreqOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx1FreqOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx2FreqOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx2FreqOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx1PowerOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx1PowerOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx2PowerOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx2PowerOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.daysSince === null ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/50 text-slate-400 rounded-full text-xs font-medium">
+                              <Icon name="HelpCircle" className="w-3 h-3" /> No Data
+                            </span>
+                          ) : hasIssue ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
+                              <Icon name="AlertTriangle" className="w-3 h-3" /> Issue
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
+                              <Icon name="CheckCircle" className="w-3 h-3" /> Good
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Frequency Error Trend Chart */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="Radio" className="w-5 h-5 text-cyan-400" /> Frequency Error Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
                 {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Metric</label>
-              <select value={selectedMetric} onChange={e => setSelectedMetric(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="frequency">Frequency Error</option>
-                <option value="modulation">Modulation Deviation</option>
-                <option value="power">Forward Power</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="FileText" className="w-8 h-8 text-blue-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.total}</p>
-                  <p className="text-xs text-slate-400 uppercase">Inspections</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="ScrollText" className="w-8 h-8 text-amber-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.logEntries}</p>
-                  <p className="text-xs text-slate-400 uppercase">Log Entries</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="Radio" className="w-8 h-8 text-emerald-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.sites}</p>
-                  <p className="text-xs text-slate-400 uppercase">Sites Covered</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border border-cyan-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="Activity" className="w-8 h-8 text-cyan-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">±{stats.avgFreqError} Hz</p>
-                  <p className="text-xs text-slate-400 uppercase">Avg Freq Error</p>
-                </div>
-              </div>
-            </div>
-            <div className={`bg-gradient-to-br ${stats.outOfSpec > 0 ? 'from-red-500/10 to-red-600/5 border-red-500/30' : 'from-emerald-500/10 to-emerald-600/5 border-emerald-500/30'} border rounded-xl p-4`}>
-              <div className="flex items-center gap-3">
-                <Icon name={stats.outOfSpec > 0 ? "AlertTriangle" : "CheckCircle"} className={`w-8 h-8 ${stats.outOfSpec > 0 ? 'text-red-400' : 'text-emerald-400'}`} />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.outOfSpec}</p>
-                  <p className="text-xs text-slate-400 uppercase">Out of Spec</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Chart */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4">{metric.label} Over Time</h3>
-            {metricData.length > 0 ? (
+            {inspections.length > 0 ? (
               <div className="space-y-4">
-                {[...new Set(metricData.map(d => d.site))].map(site => {
-                  const siteData = metricData.filter(d => d.site === site);
+                {getTrendChartData('frequency').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
                   return (
-                    <div key={site} className="border-b border-slate-700/50 pb-4 last:border-0">
-                      <p className="text-sm font-bold text-slate-300 mb-2">{site}</p>
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
                       <div className="grid grid-cols-2 gap-4">
-                        {['TX1', 'TX2'].map(tx => {
-                          const txData = siteData.filter(d => d.tx === tx);
-                          const avg = txData.length > 0 ? (txData.reduce((sum, d) => sum + d.value, 0) / txData.length).toFixed(2) : 'N/A';
-                          const min = txData.length > 0 ? Math.min(...txData.map(d => d.value)).toFixed(2) : 'N/A';
-                          const max = txData.length > 0 ? Math.max(...txData.map(d => d.value)).toFixed(2) : 'N/A';
-                          
-                          return (
-                            <div key={tx} className="bg-slate-900/50 rounded-lg p-3">
-                              <p className="text-xs font-bold text-noaa-sky mb-2">{tx}</p>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Avg:</span>
-                                  <span className="text-white font-mono">{avg}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Min:</span>
-                                  <span className="text-emerald-400 font-mono">{min}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Max:</span>
-                                  <span className="text-red-400 font-mono">{max}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Count:</span>
-                                  <span className="text-white font-mono">{txData.length}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-cyan-400 mb-1">TX1</p>
+                          <p className={`text-lg font-mono ${tx1Val > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tx1Val.toFixed(1)} Hz
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-cyan-400 mb-1">TX2</p>
+                          <p className={`text-lg font-mono ${tx2Val > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tx2Val.toFixed(1)} Hz
+                          </p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -2421,122 +2666,356 @@
             ) : (
               <div className="text-center py-12">
                 <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400">No inspection data available for selected filters</p>
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
 
-          {/* Recent Inspections Table */}
+          {/* Forward Power Trend Chart */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Icon name="Clock" className="w-5 h-5 text-noaa-sky" /> Recent Inspections
-            </h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="Zap" className="w-5 h-5 text-amber-400" /> Forward Power Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
+                {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
             {inspections.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Date</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">TX Type</th>
-                      <th className="text-right py-2 px-3 text-slate-400 font-semibold">TX1 Freq</th>
-                      <th className="text-right py-2 px-3 text-slate-400 font-semibold">TX2 Freq</th>
-                      <th className="text-center py-2 px-3 text-slate-400 font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inspections.slice(0, 15).map(i => {
-                      const freq1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
-                      const freq2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
-                      const isSpec = freq1 <= 200 && freq2 <= 200;
-                      
-                      return (
-                        <tr key={i.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          <td className="py-2 px-3 text-slate-300 font-mono text-xs">
-                            {new Date(i.timestamp).toLocaleDateString()}
-                          </td>
-                          <td className="py-2 px-3 text-white">{i.siteName || i.siteId}</td>
-                          <td className="py-2 px-3 text-slate-300 capitalize">{i.txType}</td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span className={freq1 > 200 ? 'text-red-400' : 'text-emerald-400'}>
-                              {i.tx1_freq_error || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span className={freq2 > 200 ? 'text-red-400' : 'text-emerald-400'}>
-                              {i.tx2_freq_error || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            {isSpec ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
-                                <Icon name="CheckCircle" className="w-3 h-3" /> In Spec
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
-                                <Icon name="AlertTriangle" className="w-3 h-3" /> Out of Spec
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                {getTrendChartData('forward').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
+                  return (
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-amber-400 mb-1">TX1</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx1Val.toFixed(1)} W
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-amber-400 mb-1">TX2</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx2Val.toFixed(1)} W
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-400">No recent inspections found</p>
+              <div className="text-center py-12">
+                <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
 
-          {/* Recent Maintenance Log Activity */}
+          {/* Reflected Power Trend Chart */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Icon name="ScrollText" className="w-5 h-5 text-amber-400" /> Recent Maintenance Activity
-            </h3>
-            {logEntries.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Date</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Time</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Remarks</th>
-                      <th className="text-center py-2 px-3 text-slate-400 font-semibold">Initials</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logEntries.slice(0, 15).map(log => (
-                      <tr key={log.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                        <td className="py-2 px-3 text-slate-300 font-mono text-xs">
-                          {new Date(log.timestamp).toLocaleDateString()}
-                        </td>
-                        <td className="py-2 px-3 text-slate-300 font-mono text-xs">{log.time}</td>
-                        <td className="py-2 px-3">
-                          <div className="text-white text-sm">{log.siteName}</div>
-                          <div className="text-slate-500 text-xs font-mono">{log.siteCall}</div>
-                        </td>
-                        <td className="py-2 px-3 text-slate-300">{log.remarks}</td>
-                        <td className="py-2 px-3 text-center">
-                          <span className="inline-flex items-center px-2 py-1 bg-slate-700 text-white rounded text-xs font-bold">
-                            {log.initials}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="AlertCircle" className="w-5 h-5 text-red-400" /> Reflected Power Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
+                {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {inspections.length > 0 ? (
+              <div className="space-y-4">
+                {getTrendChartData('reflected').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
+                  return (
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-red-400 mb-1">TX1</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx1Val.toFixed(1)} W
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-red-400 mb-1">TX2</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx2Val.toFixed(1)} W
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <Icon name="ScrollText" className="w-12 h-12 text-slate-600 mx-auto mb-3 opacity-30" />
-                <p className="text-slate-400">No maintenance log entries found</p>
+              <div className="text-center py-12">
+                <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
+        </div>
+      );
+    };
+
+    // Resources
+    const Resources = ({ userRole }) => {
+      const [resources, setResources] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [uploading, setUploading] = useState(false);
+      const [uploadProgress, setUploadProgress] = useState(0);
+
+      // Category definitions with icons and colors - Organized by transmitter type
+      const categories = [
+        { id: 'Armstrong', name: 'Armstrong Transmitters', icon: 'Radio', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+        { id: 'Crown', name: 'Crown Transmitters', icon: 'Radio', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+        { id: 'Nautel', name: 'Nautel Transmitters', icon: 'Radio', color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
+      ];
+
+      // Load resources from Firebase Storage
+      useEffect(() => {
+        const loadResources = async () => {
+          try {
+            const storageRef = storage.ref('Resources');
+            const result = await storageRef.listAll();
+
+            // Get files from all subfolders (Armstrong, Crown, Nautel)
+            const allFiles = [];
+            for (const folderRef of result.prefixes) {
+              const folderResult = await folderRef.listAll();
+              const folderName = folderRef.name; // Armstrong, Crown, or Nautel
+
+              for (const itemRef of folderResult.items) {
+                const url = await itemRef.getDownloadURL();
+                const metadata = await itemRef.getMetadata();
+
+                allFiles.push({
+                  name: itemRef.name,
+                  url: url,
+                  size: metadata.size,
+                  type: metadata.contentType,
+                  category: folderName,
+                  updated: metadata.updated
+                });
+              }
+            }
+
+            setResources(allFiles);
+            setLoading(false);
+          } catch (error) {
+            console.error('Error loading resources:', error);
+            setLoading(false);
+          }
+        };
+
+        loadResources();
+      }, []);
+
+      // Upload file handler (admin only)
+      const handleUpload = async (e, category) => {
+        if (userRole !== 'admin') {
+          alert('Only admins can upload files');
+          return;
+        }
+
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+          const storageRef = storage.ref(`resources/${category}/${file.name}`);
+          const uploadTask = storageRef.put(file);
+
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error('Upload error:', error);
+              alert('Upload failed: ' + error.message);
+              setUploading(false);
+            },
+            async () => {
+              alert('✓ File uploaded successfully!');
+              setUploading(false);
+              setUploadProgress(0);
+              // Reload resources
+              window.location.reload();
+            }
+          );
+        } catch (error) {
+          console.error('Upload error:', error);
+          alert('Upload failed: ' + error.message);
+          setUploading(false);
+        }
+      };
+
+      // Delete file handler (admin only)
+      const handleDelete = async (resource) => {
+        if (userRole !== 'admin') {
+          alert('Only admins can delete files');
+          return;
+        }
+
+        if (!confirm(`Delete ${resource.name}?`)) return;
+
+        try {
+          const storageRef = storage.ref(`resources/${resource.category}/${resource.name}`);
+          await storageRef.delete();
+          alert('✓ File deleted successfully!');
+          setResources(resources.filter(r => r.name !== resource.name));
+        } catch (error) {
+          console.error('Delete error:', error);
+          alert('Delete failed: ' + error.message);
+        }
+      };
+
+      // Format file size
+      const formatSize = (bytes) => {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      };
+
+      // Get file icon based on type
+      const getFileIcon = (type) => {
+        if (type?.includes('pdf')) return 'FileText';
+        if (type?.includes('image')) return 'Image';
+        if (type?.includes('video')) return 'Video';
+        if (type?.includes('word') || type?.includes('document')) return 'FileText';
+        if (type?.includes('sheet') || type?.includes('excel')) return 'Table';
+        if (type?.includes('presentation') || type?.includes('powerpoint')) return 'Presentation';
+        return 'File';
+      };
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-noaa-sky border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading resources...</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-6 animate-in">
+          {/* Header */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Icon name="FolderOpen" className="w-5 h-5 text-noaa-sky" /> Resources Library
+                </h2>
+                <p className="text-sm text-slate-400 mt-1">{resources.length} files available • Organized by transmitter type</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Categories */}
+          {categories.map(cat => {
+            const categoryFiles = resources.filter(r => r.category === cat.id);
+
+            return (
+              <div key={cat.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${cat.bg}`}>
+                      <Icon name={cat.icon} className={`w-5 h-5 ${cat.color}`} />
+                    </div>
+                    {cat.name}
+                    <span className="text-sm text-slate-500">({categoryFiles.length})</span>
+                  </h3>
+
+                  {userRole === 'admin' && (
+                    <label className="px-4 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-sm font-semibold rounded-lg cursor-pointer transition-colors flex items-center gap-2">
+                      <Icon name="Upload" className="w-4 h-4" />
+                      Upload
+                      <input
+                        type="file"
+                        onChange={(e) => handleUpload(e, cat.id)}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {categoryFiles.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">
+                    <Icon name="Inbox" className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No files in this category</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categoryFiles.map(file => (
+                      <div key={file.name} className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-4 hover:border-noaa-sky/50 transition-all">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-slate-800 rounded-lg">
+                            <Icon name={getFileIcon(file.type)} className="w-5 h-5 text-noaa-sky" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-white text-sm truncate" title={file.name}>
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">{formatSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 px-3 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Icon name="ExternalLink" className="w-3 h-3" />
+                            Open
+                          </a>
+                          {userRole === 'admin' && (
+                            <button
+                              onClick={() => handleDelete(file)}
+                              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-semibold rounded-lg transition-colors"
+                            >
+                              <Icon name="Trash2" className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="fixed bottom-24 right-6 bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl z-50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 border-4 border-noaa-sky border-t-transparent rounded-full animate-spin"></div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Uploading...</p>
+                  <p className="text-slate-400 text-xs">{Math.round(uploadProgress)}%</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
@@ -2776,12 +3255,19 @@
       );
     };
 
-    // Past Inspections History
-    const PastInspections = () => {
+    // Past Inspections History (Site-Grouped View)
+    const PastInspections = ({ setTab, setEditingInspection, userRole }) => {
       const [inspections, setInspections] = useState([]);
       const [loading, setLoading] = useState(true);
       const [selectedInspection, setSelectedInspection] = useState(null);
       const [searchTerm, setSearchTerm] = useState('');
+      const [expandedSites, setExpandedSites] = useState({});
+
+      const handleEdit = (inspection) => {
+        setEditingInspection(inspection);
+        setSelectedInspection(null);
+        setTab('forms');
+      };
 
       useEffect(() => {
         const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
@@ -2798,18 +3284,49 @@
         return () => unsubscribe();
       }, []);
 
-      const filteredInspections = inspections.filter(inspection => {
-        const term = searchTerm.toLowerCase();
-        return (
-          inspection.siteId?.toLowerCase().includes(term) ||
-          inspection.tech?.toLowerCase().includes(term) ||
-          inspection.date?.includes(term)
-        );
-      });
-
       const getSiteName = (siteId) => {
         const site = SITES.find(s => s.id === siteId);
         return site ? site.name : siteId;
+      };
+
+      const getSiteCall = (siteId) => {
+        const site = SITES.find(s => s.id === siteId);
+        return site ? site.call : '';
+      };
+
+      const toggleSite = (siteId) => {
+        setExpandedSites(prev => ({ ...prev, [siteId]: !prev[siteId] }));
+      };
+
+      // Group inspections by site
+      const groupedBySite = inspections.reduce((acc, inspection) => {
+        const siteId = inspection.siteId;
+        if (!acc[siteId]) acc[siteId] = [];
+        acc[siteId].push(inspection);
+        return acc;
+      }, {});
+
+      // Filter sites based on search term
+      const filteredSites = Object.keys(groupedBySite).filter(siteId => {
+        const term = searchTerm.toLowerCase();
+        const siteName = getSiteName(siteId).toLowerCase();
+        const siteCall = getSiteCall(siteId).toLowerCase();
+        return siteId.toLowerCase().includes(term) || siteName.includes(term) || siteCall.includes(term);
+      });
+
+      // Helper to get time since last inspection
+      const getTimeSince = (timestamp) => {
+        const now = new Date();
+        const then = new Date(timestamp);
+        const diffMs = now - then;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return 'Today';
+        if (diffDays === 1) return '1 day ago';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+        return `${Math.floor(diffDays / 365)} years ago`;
       };
 
       if (loading) {
@@ -2830,15 +3347,15 @@
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Icon name="Archive" className="w-5 h-5 text-noaa-sky" /> Inspection History
+                  <Icon name="Archive" className="w-5 h-5 text-noaa-sky" /> Inspection History by Site
                 </h2>
-                <p className="text-sm text-slate-400 mt-1">{inspections.length} total inspections</p>
+                <p className="text-sm text-slate-400 mt-1">{inspections.length} inspections across {Object.keys(groupedBySite).length} sites</p>
               </div>
               <div className="relative w-full sm:w-72">
                 <Icon name="Search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   type="text"
-                  placeholder="Search by site, tech, or date..."
+                  placeholder="Search sites..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:border-noaa-sky outline-none"
@@ -2847,52 +3364,97 @@
             </div>
           </div>
 
-          {/* Inspections List */}
-          {filteredInspections.length === 0 ? (
+          {/* Site-Grouped List */}
+          {filteredSites.length === 0 ? (
             <div className="text-center py-12">
-              <Icon name="FileText" className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <Icon name="Radio" className="w-16 h-16 text-slate-600 mx-auto mb-4" />
               <p className="text-slate-400">
-                {searchTerm ? 'No inspections match your search' : 'No inspections recorded yet'}
+                {searchTerm ? 'No sites match your search' : 'No inspections recorded yet'}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredInspections.map(inspection => (
-                <div
-                  key={inspection.id}
-                  onClick={() => setSelectedInspection(inspection)}
-                  className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 hover:border-noaa-sky/50 transition-all cursor-pointer"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-bold text-white text-lg">{getSiteName(inspection.siteId)}</h3>
-                      <p className="text-noaa-sky text-sm font-mono">{inspection.siteId}</p>
+            <div className="space-y-3">
+              {filteredSites
+                .sort((a, b) => {
+                  // Sort by most recent inspection
+                  const aLatest = groupedBySite[a][0].timestamp;
+                  const bLatest = groupedBySite[b][0].timestamp;
+                  return new Date(bLatest) - new Date(aLatest);
+                })
+                .map(siteId => {
+                  const siteInspections = groupedBySite[siteId];
+                  const latestInspection = siteInspections[0];
+                  const isExpanded = expandedSites[siteId];
+
+                  return (
+                    <div key={siteId} className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+                      {/* Site Header */}
+                      <div
+                        onClick={() => toggleSite(siteId)}
+                        className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <Icon name="Radio" className="w-5 h-5 text-noaa-sky" />
+                              <div>
+                                <h3 className="font-bold text-white text-lg">{getSiteName(siteId)}</h3>
+                                <p className="text-noaa-sky text-sm font-mono">{siteId} • {getSiteCall(siteId)}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="text-xs text-slate-500">Last inspected</p>
+                              <p className="text-sm font-semibold text-white">{getTimeSince(latestInspection.timestamp)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-slate-500">Total</p>
+                              <p className="text-sm font-semibold text-noaa-sky">{siteInspections.length}</p>
+                            </div>
+                            <Icon
+                              name={isExpanded ? "ChevronUp" : "ChevronDown"}
+                              className="w-5 h-5 text-slate-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Inspection List */}
+                      {isExpanded && (
+                        <div className="border-t border-slate-700/50 bg-slate-900/30">
+                          <div className="p-4 space-y-2">
+                            {siteInspections.map(inspection => (
+                              <div
+                                key={inspection.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedInspection(inspection);
+                                }}
+                                className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg hover:border-noaa-sky/50 transition-all cursor-pointer"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <Icon name="FileText" className="w-4 h-4 text-noaa-sky" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-white font-semibold text-sm">{inspection.date}</span>
+                                        <span className="text-slate-500 text-xs">•</span>
+                                        <span className="text-slate-400 text-sm">{inspection.tech}</span>
+                                      </div>
+                                      <p className="text-slate-500 text-xs mt-0.5">{getTimeSince(inspection.timestamp)}</p>
+                                    </div>
+                                  </div>
+                                  <Icon name="ChevronRight" className="w-4 h-4 text-slate-500" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <Icon name="FileText" className="w-5 h-5 text-noaa-sky" />
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Date</span>
-                      <span className="text-white">{inspection.date}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Technician</span>
-                      <span className="text-white">{inspection.tech}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Submitted</span>
-                      <span className="text-slate-400 text-xs">
-                        {inspection.timestamp ? new Date(inspection.timestamp.seconds * 1000).toLocaleDateString() : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-700/50">
-                    <button className="text-xs text-noaa-sky font-semibold flex items-center gap-1 hover:text-noaa-light">
-                      View Details <Icon name="ChevronRight" className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           )}
 
@@ -2908,12 +3470,23 @@
                       {getSiteName(selectedInspection.siteId)} • {selectedInspection.date}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedInspection(null)}
-                    className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    <Icon name="X" className="w-6 h-6 text-slate-400" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => handleEdit(selectedInspection)}
+                        className="px-4 py-2 bg-noaa-sky hover:bg-noaa-light text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Icon name="Edit" className="w-4 h-4" />
+                        Edit
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedInspection(null)}
+                      className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <Icon name="X" className="w-6 h-6 text-slate-400" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Modal Content */}
@@ -2939,7 +3512,7 @@
                       <div>
                         <p className="text-slate-500">Submitted</p>
                         <p className="text-white">
-                          {selectedInspection.timestamp ? new Date(selectedInspection.timestamp.seconds * 1000).toLocaleString() : 'N/A'}
+                          {selectedInspection.timestamp ? new Date(selectedInspection.timestamp).toLocaleString() : 'N/A'}
                         </p>
                       </div>
                     </div>
@@ -2985,38 +3558,38 @@
       const [userRole, setUserRole] = useState(null);
       const [loading, setLoading] = useState(true);
       const [tab, setTab] = useState('dashboard');
+      const [emailInput, setEmailInput] = useState('');
+      const [passwordInput, setPasswordInput] = useState('');
+      const [loggingIn, setLoggingIn] = useState(false);
+      const [editingInspection, setEditingInspection] = useState(null);
 
+      // Listen for authentication state changes
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(async (u) => {
+          if (!u) {
+            setLoading(false);
+            setUser(null);
+            setUserRole(null);
+            return;
+          }
+
           setUser(u);
 
-          if (u) {
-            // Check if user's email is from @noaa.gov domain
-            const email = u.email || '';
-            if (!email.endsWith('@noaa.gov')) {
-              alert('Access restricted to @noaa.gov email addresses only.');
-              await auth.signOut();
-              setLoading(false);
-              return;
-            }
+          // Fetch user role from Firestore
+          try {
+            const roleDoc = await db.collection('artifacts').doc(appId)
+              .collection('public').doc('data')
+              .collection('user_roles').doc(u.uid).get();
 
-            // Fetch user role from Firebase
-            try {
-              const roleDoc = await db.collection('artifacts').doc(appId).collection('public').doc('data')
-                .collection('user_roles').doc(u.uid).get();
-
-              if (roleDoc.exists) {
-                setUserRole(roleDoc.data().role || 'viewer');
-              } else {
-                // Default to viewer for new users
-                setUserRole('viewer');
-              }
-            } catch (error) {
-              console.error('Error fetching user role:', error);
+            if (roleDoc.exists) {
+              setUserRole(roleDoc.data().role || 'viewer');
+            } else {
+              console.warn('No role found for user, defaulting to viewer');
               setUserRole('viewer');
             }
-          } else {
-            setUserRole(null);
+          } catch (error) {
+            console.error('Error fetching user role:', error);
+            setUserRole('viewer');
           }
 
           setLoading(false);
@@ -3025,40 +3598,103 @@
         return unsub;
       }, []);
 
-      const signInWithGoogle = async () => {
-        setLoading(true);
+      const handleLoginSubmit = async (e) => {
+        e.preventDefault();
+        setLoggingIn(true);
+
         try {
-          const provider = new firebase.auth.GoogleAuthProvider();
-          provider.setCustomParameters({
-            hd: 'noaa.gov' // Hint to only show @noaa.gov accounts
-          });
-          await auth.signInWithPopup(provider);
+          await auth.signInWithEmailAndPassword(emailInput, passwordInput);
+          // onAuthStateChanged will handle the rest
+          setEmailInput('');
+          setPasswordInput('');
         } catch (error) {
-          console.error('Sign-in error:', error);
-          alert('Failed to sign in. Please try again.');
-          setLoading(false);
+          console.error('Login error:', error);
+          let errorMessage = 'Login failed. Please check your credentials.';
+
+          if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email.';
+          } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password.';
+          } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+          } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many failed attempts. Please try again later.';
+          }
+
+          alert('❌ ' + errorMessage);
+          setPasswordInput('');
+        } finally {
+          setLoggingIn(false);
         }
+      };
+
+      const handleSignOut = () => {
+        auth.signOut();
       };
 
       if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" /></div>;
 
       if (!user) return (
         <div className="min-h-screen bg-gradient-to-br from-noaa-blue via-slate-900 to-noaa-blue flex items-center justify-center p-4">
-          <div className="bg-slate-900/90 border border-slate-700/50 rounded-2xl p-8 max-w-md w-full text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-noaa-sky/20 flex items-center justify-center"><Icon name="Radio" className="w-8 h-8 text-noaa-sky" /></div>
-            <h1 className="text-2xl font-bold text-white mb-2">NWR Maintenance</h1>
-            <p className="text-noaa-sky text-sm mb-4">EHB-7 Technician Portal</p>
-            <p className="text-slate-400 text-xs mb-6">Restricted to @noaa.gov accounts only</p>
-            <button onClick={signInWithGoogle}
-              className="w-full bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Sign in with Google
-            </button>
+          <div className="bg-slate-900/90 border border-slate-700/50 rounded-2xl p-8 max-w-md w-full">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-noaa-sky/20 flex items-center justify-center">
+                <Icon name="Radio" className="w-8 h-8 text-noaa-sky" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">NWR Maintenance Portal</h1>
+              <p className="text-noaa-sky text-sm">EHB-7 Technician Portal</p>
+            </div>
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                <div className="relative">
+                  <Icon name="Mail" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="username@nwr.local"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                    autoFocus
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                <div className="relative">
+                  <Icon name="Lock" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loggingIn}
+                className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loggingIn ? (
+                  <>
+                    <Icon name="Loader2" className="w-5 h-5 animate-spin" />
+                    Signing In...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="LogIn" className="w-5 h-5" />
+                    Sign In
+                  </>
+                )}
+              </button>
+            </form>
+            <p className="text-xs text-slate-500 text-center mt-6">
+              Authorized personnel only • Contact administrator for access
+            </p>
           </div>
         </div>
       );
@@ -3068,6 +3704,7 @@
         { id: 'forms', label: 'Inspection', icon: 'ClipboardList' },
         { id: 'history', label: 'History', icon: 'Archive' },
         { id: 'analytics', label: 'Analytics', icon: 'TrendingUp' },
+        { id: 'resources', label: 'Resources', icon: 'FolderOpen' },
         { id: 'sites', label: 'Sites', icon: 'Radio' }
       ];
 
@@ -3090,8 +3727,14 @@
               
               <div className="relative max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/95 rounded-2xl flex items-center justify-center shadow-2xl shadow-noaa-blue/40 border-2 border-noaa-cyan/40">
-                    <Icon name="Radio" className="w-8 h-8 text-noaa-blue" />
+                  {/* NOAA NWR Logo */}
+                  <div className="flex items-center">
+                    <img
+                      src="./NWR.png"
+                      alt="NOAA All Hazards Weather Radio Logo"
+                      className="nwr-logo drop-shadow-2xl"
+                      style={{filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))'}}
+                    />
                   </div>
                   <div>
                     <h1 className="font-black text-white text-3xl tracking-tight drop-shadow-lg" style={{textShadow: '0 2px 12px rgba(0,0,0,0.6)'}}>
@@ -3115,7 +3758,7 @@
                         <Icon name={n.icon} className="w-4 h-4" /> {n.label}
                       </button>
                     ))}
-                    <button onClick={() => auth.signOut()}
+                    <button onClick={handleSignOut}
                       className="px-4 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-2">
                       <Icon name="LogOut" className="w-4 h-4" />
                     </button>
@@ -3134,7 +3777,7 @@
                   )}
                 </div>
                 
-                <button onClick={() => auth.signOut()}
+                <button onClick={handleSignOut}
                   className="md:hidden text-white/80 hover:text-white transition-colors p-3 hover:bg-white/10 rounded-xl backdrop-blur">
                   <Icon name="LogOut" className="w-5 h-5" />
                 </button>
@@ -3152,9 +3795,10 @@
               </div>
             )}
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
-            {tab === 'forms' && <InspectionForm user={user} userRole={userRole} />}
-            {tab === 'history' && <PastInspections />}
+            {tab === 'forms' && <InspectionForm user={user} userRole={userRole} editingInspection={editingInspection} setEditingInspection={setEditingInspection} />}
+            {tab === 'history' && <PastInspections setTab={setTab} setEditingInspection={setEditingInspection} userRole={userRole} />}
             {tab === 'analytics' && <Analytics />}
+            {tab === 'resources' && <Resources userRole={userRole} />}
             {tab === 'sites' && <SitesList userRole={userRole} />}
           </main>
           <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-noaa-blue/95 border-t border-slate-800 px-2 py-2 z-50">
