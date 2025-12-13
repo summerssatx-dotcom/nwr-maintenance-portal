@@ -2207,7 +2207,7 @@
       // Load site statuses from Firebase
       useEffect(() => {
         const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
-          .collection('site_status')
+          .collection('site_statuses')
           .onSnapshot(snapshot => {
             const statuses = {};
             snapshot.docs.forEach(doc => {
