@@ -2256,13 +2256,23 @@
         const headers = ['Timestamp', 'Site', 'TX Type', 'TX1 Freq Error', 'TX2 Freq Error',
           'TX1 Fwd Pwr', 'TX2 Fwd Pwr', 'TX1 Refl Pwr', 'TX2 Refl Pwr', 'Tech ID'];
 
-        const rows = inspections.map(i => [
-          i.timestamp, i.siteName || i.siteId, i.txType,
-          i.tx1_freq_error || '', i.tx2_freq_error || '',
-          i.tx1_ext_fwd || '', i.tx2_ext_fwd || '',
-          i.tx1_ext_refl || '', i.tx2_ext_refl || '',
-          i.techId || ''
-        ]);
+        const rows = inspections.map(i => {
+          // Calculate frequency error for CSV export
+          const site = SITES.find(s => s.id === i.siteId);
+          const assignedFreqMHz = site ? parseFloat(site.freq) : 0;
+          const measuredFreq1 = parseFloat(i.freq_final_1) || 0;
+          const measuredFreq2 = parseFloat(i.freq_final_2) || 0;
+          const freq1Error = assignedFreqMHz ? Math.abs((measuredFreq1 - assignedFreqMHz) * 1000000).toFixed(1) : '';
+          const freq2Error = assignedFreqMHz ? Math.abs((measuredFreq2 - assignedFreqMHz) * 1000000).toFixed(1) : '';
+
+          return [
+            i.timestamp, i.siteName || i.siteId, i.txType,
+            freq1Error, freq2Error,
+            i.tx1_ext_fwd || '', i.tx2_ext_fwd || '',
+            i.tx1_ext_refl || '', i.tx2_ext_refl || '',
+            i.techId || ''
+          ];
+        });
 
         const csv = [headers, ...rows].map(row => row.map(escapeCSV).join(',')).join('\n');
 
@@ -2372,8 +2382,18 @@
                       );
                     }
 
-                    const freq1 = Math.abs(parseFloat(latestInspection.tx1_freq_error) || 0);
-                    const freq2 = Math.abs(parseFloat(latestInspection.tx2_freq_error) || 0);
+                    // Calculate frequency error from inspection data
+                    // Site's assigned frequency (e.g., "162.400 MHz")
+                    const assignedFreqMHz = parseFloat(site.freq);
+
+                    // Use final frequency readings (more stable after warmup)
+                    const measuredFreq1 = parseFloat(latestInspection.freq_final_1) || 0;
+                    const measuredFreq2 = parseFloat(latestInspection.freq_final_2) || 0;
+
+                    // Calculate error in Hz: (Measured - Assigned) × 1,000,000
+                    const freq1 = Math.abs((measuredFreq1 - assignedFreqMHz) * 1000000);
+                    const freq2 = Math.abs((measuredFreq2 - assignedFreqMHz) * 1000000);
+
                     const fwd1 = parseFloat(latestInspection.tx1_ext_fwd) || 0;
                     const fwd2 = parseFloat(latestInspection.tx2_ext_fwd) || 0;
                     const refl1 = parseFloat(latestInspection.tx1_ext_refl) || 0;
