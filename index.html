@@ -2202,6 +2202,7 @@
       const [inspections, setInspections] = useState([]);
       const [loading, setLoading] = useState(true);
       const [siteStatuses, setSiteStatuses] = useState({});
+      const [siteRemarks, setSiteRemarks] = useState({});
       const [selectedSite, setSelectedSite] = useState(null);
 
       // Load site statuses from Firebase
@@ -2210,10 +2211,14 @@
           .collection('site_statuses')
           .onSnapshot(snapshot => {
             const statuses = {};
+            const remarks = {};
             snapshot.docs.forEach(doc => {
-              statuses[doc.id] = doc.data().status || 'online';
+              const data = doc.data();
+              statuses[doc.id] = data.status || 'online';
+              remarks[doc.id] = data.remarks || '';
             });
             setSiteStatuses(statuses);
+            setSiteRemarks(remarks);
           }, error => {
             console.error('Error loading site statuses:', error);
           });
@@ -2334,7 +2339,7 @@
                     <h3 className="font-bold text-white text-lg mb-1">{site.name}</h3>
                     <p className="text-sm font-mono text-slate-400">{site.call}</p>
                     <p className={`text-xs font-semibold ${config.color} mt-2 uppercase`}>
-                      {status === 'offline' ? 'Not Operational' : status}
+                      {status}
                     </p>
                   </div>
                 </div>
@@ -2407,9 +2412,19 @@
                         <div className={`bg-gradient-to-br ${config.bg} border ${config.border} rounded-xl p-6 text-center`}>
                           <Icon name={config.icon} className={`w-20 h-20 mx-auto mb-3 ${config.color}`} />
                           <h3 className={`text-2xl font-bold ${config.color} uppercase`}>
-                            {status === 'offline' ? 'Not Operational' : status}
+                            {status}
                           </h3>
                         </div>
+
+                        {/* Remarks (if degraded or offline) */}
+                        {(status === 'degraded' || status === 'offline') && siteRemarks[selectedSite] && (
+                          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                            <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                              <Icon name="MessageSquare" className="w-4 h-4 text-amber-400" /> Remarks
+                            </h3>
+                            <p className="text-sm text-slate-300">{siteRemarks[selectedSite]}</p>
+                          </div>
+                        )}
 
                         {/* Last Inspection Info */}
                         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
@@ -2758,6 +2773,7 @@
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
       const [siteStatuses, setSiteStatuses] = useState({});
+      const [siteRemarks, setSiteRemarks] = useState({});
       const [loading, setLoading] = useState(true);
 
       // Load site statuses from Firebase
@@ -2766,14 +2782,19 @@
           .collection('site_statuses')
           .onSnapshot(snapshot => {
             const statusMap = {};
+            const remarksMap = {};
             snapshot.docs.forEach(doc => {
-              statusMap[doc.id] = doc.data().status || 'online';
+              const data = doc.data();
+              statusMap[doc.id] = data.status || 'online';
+              remarksMap[doc.id] = data.remarks || '';
             });
             // Initialize missing sites as 'online'
             SITES.forEach(site => {
               if (!statusMap[site.id]) statusMap[site.id] = 'online';
+              if (!remarksMap[site.id]) remarksMap[site.id] = '';
             });
             setSiteStatuses(statusMap);
+            setSiteRemarks(remarksMap);
             setLoading(false);
           }, error => {
             console.error('Error loading site statuses:', error);
@@ -2781,18 +2802,44 @@
             const initial = {};
             SITES.forEach(site => initial[site.id] = 'online');
             setSiteStatuses(initial);
+            setSiteRemarks({});
             setLoading(false);
           });
         return () => unsubscribe();
       }, []);
 
       const updateSiteStatus = async (siteId, newStatus) => {
+        // Validate remarks if status is degraded or offline
+        const currentRemarks = siteRemarks[siteId] || '';
+        if ((newStatus === 'degraded' || newStatus === 'offline') && !currentRemarks.trim()) {
+          alert('Please provide remarks explaining why the site is ' + (newStatus === 'offline' ? 'offline' : 'degraded') + '.');
+          return;
+        }
+
         try {
           await db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('site_statuses').doc(siteId).set({ status: newStatus });
+            .collection('site_statuses').doc(siteId).set({
+              status: newStatus,
+              remarks: currentRemarks
+            });
         } catch (error) {
           console.error('Error updating site status:', error);
           alert('Failed to update site status. Please try again.');
+        }
+      };
+
+      const updateSiteRemarks = async (siteId, newRemarks) => {
+        setSiteRemarks(prev => ({ ...prev, [siteId]: newRemarks }));
+
+        try {
+          const status = siteStatuses[siteId] || 'online';
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('site_statuses').doc(siteId).set({
+              status: status,
+              remarks: newRemarks
+            });
+        } catch (error) {
+          console.error('Error updating site remarks:', error);
         }
       };
 
@@ -2806,7 +2853,7 @@
       const statusConfig = {
         'online': { label: '● Online', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', dotColor: 'bg-emerald-500' },
         'degraded': { label: '● Degraded', color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', dotColor: 'bg-amber-500' },
-        'offline': { label: '● Not Operational', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', dotColor: 'bg-red-500' }
+        'offline': { label: '● Offline', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', dotColor: 'bg-red-500' }
       };
 
       const onlineSites = Object.values(siteStatuses).filter(s => s === 'online').length;
@@ -2899,11 +2946,27 @@
                     >
                       <option value="online">● Online</option>
                       <option value="degraded">● Degraded</option>
-                      <option value="offline">● Not Operational</option>
+                      <option value="offline">● Offline</option>
                     </select>
                   </div>
+
+                  {/* Remarks field for Degraded/Offline status */}
+                  {(status === 'degraded' || status === 'offline') && (
+                    <div className="mt-2">
+                      <label className="text-slate-500 text-xs block mb-1">
+                        Remarks <span className="text-red-400">*</span>
+                      </label>
+                      <textarea
+                        value={siteRemarks[s.id] || ''}
+                        onChange={(e) => updateSiteRemarks(s.id, e.target.value)}
+                        placeholder={`Explain why the site is ${status}...`}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white placeholder-slate-600 outline-none focus:border-noaa-sky resize-none"
+                        rows="2"
+                      />
+                    </div>
+                  )}
                 </div>
-                
+
                 {/* Expandable Details Section */}
                 {expanded[s.id] && (
                   <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-3 animate-in">
