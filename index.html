@@ -2200,11 +2200,10 @@
     // Analytics & Trend Analysis
     const Analytics = () => {
       const [inspections, setInspections] = useState([]);
-      const [logEntries, setLogEntries] = useState([]);
+      const [allInspections, setAllInspections] = useState([]); // For site health check
       const [loading, setLoading] = useState(true);
       const [timeRange, setTimeRange] = useState('30'); // days
-      const [selectedSite, setSelectedSite] = useState('all');
-      const [selectedMetric, setSelectedMetric] = useState('frequency');
+      const [selectedChartSite, setSelectedChartSite] = useState('average'); // For trend charts
 
       useEffect(() => {
         const fetchInspections = async () => {
@@ -2212,143 +2211,249 @@
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
 
-            let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
-              .collection('inspections').orderBy('timestamp', 'desc');
+            const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').orderBy('timestamp', 'desc').get();
 
-            if (selectedSite !== 'all') {
-              query = query.where('siteId', '==', selectedSite);
-            }
+            const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const filtered = all.filter(d => new Date(d.timestamp) >= cutoff);
 
-            const snapshot = await query.get();
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-              .filter(d => new Date(d.timestamp) >= cutoff);
-
-            setInspections(data);
+            setAllInspections(all); // For site health dashboard (needs all history)
+            setInspections(filtered); // For trend charts (time-filtered)
+            setLoading(false);
           } catch (e) {
             console.error('Error fetching inspections:', e);
-            // Show error state to user
-            alert('⚠️ Error loading inspection data: ' + (e.message || 'Please check your connection and try again.'));
-          } finally {
+            alert('⚠️ Error loading inspection data');
             setLoading(false);
           }
         };
 
         fetchInspections();
 
-        let unsubscribe = () => {};
-        try {
-          unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('inspections').onSnapshot(
-              () => fetchInspections(),
-              (error) => console.error('Real-time update error:', error)
-            );
-        } catch (e) {
-          console.error('Error setting up real-time listener:', e);
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections').onSnapshot(
+            () => fetchInspections(),
+            (error) => console.error('Real-time update error:', error)
+          );
+
+        return () => unsubscribe();
+      }, [timeRange]);
+
+      // Helper: Get site name
+      const getSiteName = (siteId) => {
+        const site = SITES.find(s => s.id === siteId);
+        return site ? site.name : siteId;
+      };
+
+      // Helper: Get days since last inspection
+      const getDaysSince = (timestamp) => {
+        const now = new Date();
+        const then = new Date(timestamp);
+        return Math.floor((now - then) / (1000 * 60 * 60 * 24));
+      };
+
+      // Helper: Check if reflected power is within spec (≤3% of forward power)
+      const isReflectedPowerOK = (fwd, refl) => {
+        if (!fwd || !refl) return true; // Can't determine if no data
+        const fwdNum = parseFloat(fwd);
+        const reflNum = parseFloat(refl);
+        if (isNaN(fwdNum) || isNaN(reflNum)) return true;
+        return reflNum <= (fwdNum * 0.03);
+      };
+
+      // Get latest inspection for each site
+      const siteHealthData = SITES.map(site => {
+        const siteInspections = allInspections.filter(i => i.siteId === site.id);
+        if (siteInspections.length === 0) {
+          return {
+            siteId: site.id,
+            siteName: site.name,
+            lastInspection: null,
+            daysSince: null,
+            tx1FreqOK: null,
+            tx2FreqOK: null,
+            tx1PowerOK: null,
+            tx2PowerOK: null
+          };
         }
 
-        return () => unsubscribe();
-      }, [timeRange, selectedSite]);
+        const latest = siteInspections[0]; // Already sorted by timestamp desc
+        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
+        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
 
-      // Load and filter maintenance log entries from Firebase
-      useEffect(() => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
+        return {
+          siteId: site.id,
+          siteName: site.name,
+          lastInspection: latest.timestamp,
+          daysSince: getDaysSince(latest.timestamp),
+          tx1FreqOK: freq1 <= 200,
+          tx2FreqOK: freq2 <= 200,
+          tx1PowerOK: isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl),
+          tx2PowerOK: isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl),
+          latestInspection: latest
+        };
+      });
 
-        let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
-          .collection('maintenance_log')
-          .orderBy('timestamp', 'desc');
+      // Red flags: issues that need attention
+      const redFlags = [];
 
-        const unsubscribe = query.onSnapshot(snapshot => {
-          let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          // Filter by date range
-          data = data.filter(log => new Date(log.timestamp) >= cutoff);
-
-          // Filter by site if specified
-          if (selectedSite !== 'all') {
-            data = data.filter(log => log.siteId === selectedSite);
+      // Check each site's latest inspection
+      siteHealthData.forEach(site => {
+        if (!site.latestInspection) {
+          if (site.daysSince === null) {
+            redFlags.push({
+              type: 'never-inspected',
+              site: site.siteName,
+              message: `${site.siteName} - Never inspected`
+            });
           }
+          return;
+        }
 
-          setLogEntries(data);
-        }, error => {
-          console.error('Error loading maintenance log:', error);
-          setLogEntries([]);
-        });
+        const latest = site.latestInspection;
 
-        return () => unsubscribe();
-      }, [timeRange, selectedSite]);
+        // Overdue (>7 days)
+        if (site.daysSince > 7) {
+          redFlags.push({
+            type: 'overdue',
+            site: site.siteName,
+            message: `${site.siteName} - Not inspected in ${site.daysSince} days`
+          });
+        }
+
+        // Frequency errors
+        const freq1 = Math.abs(parseFloat(latest.tx1_freq_error) || 0);
+        const freq2 = Math.abs(parseFloat(latest.tx2_freq_error) || 0);
+        if (freq1 > 200) {
+          redFlags.push({
+            type: 'frequency',
+            site: site.siteName,
+            message: `${site.siteName} TX1 - Frequency Error: ${freq1.toFixed(0)} Hz (threshold: 200 Hz)`
+          });
+        }
+        if (freq2 > 200) {
+          redFlags.push({
+            type: 'frequency',
+            site: site.siteName,
+            message: `${site.siteName} TX2 - Frequency Error: ${freq2.toFixed(0)} Hz (threshold: 200 Hz)`
+          });
+        }
+
+        // Reflected power
+        if (!isReflectedPowerOK(latest.tx1_ext_fwd, latest.tx1_ext_refl)) {
+          const fwd = parseFloat(latest.tx1_ext_fwd);
+          const refl = parseFloat(latest.tx1_ext_refl);
+          const pct = ((refl / fwd) * 100).toFixed(1);
+          redFlags.push({
+            type: 'power',
+            site: site.siteName,
+            message: `${site.siteName} TX1 - Reflected Power: ${pct}% (threshold: 3%)`
+          });
+        }
+        if (!isReflectedPowerOK(latest.tx2_ext_fwd, latest.tx2_ext_refl)) {
+          const fwd = parseFloat(latest.tx2_ext_fwd);
+          const refl = parseFloat(latest.tx2_ext_refl);
+          const pct = ((refl / fwd) * 100).toFixed(1);
+          redFlags.push({
+            type: 'power',
+            site: site.siteName,
+            message: `${site.siteName} TX2 - Reflected Power: ${pct}% (threshold: 3%)`
+          });
+        }
+      });
 
       const exportCSV = () => {
-        if (!inspections.length && !logEntries.length) return alert('No data to export');
+        if (!inspections.length) return alert('No data to export');
 
-        // Helper function to escape CSV fields properly
         const escapeCSV = (field) => {
           if (field == null) return '';
           const str = String(field);
-          // If field contains comma, quote, or newline, wrap in quotes and escape existing quotes
           if (str.includes(',') || str.includes('"') || str.includes('\n')) {
             return `"${str.replace(/"/g, '""')}"`;
           }
           return str;
         };
 
-        const headers = ['Type', 'Timestamp', 'Site', 'Call Sign', 'TX Type', 'TX1 Freq Error', 'TX2 Freq Error',
-          'TX1 Modulation', 'TX2 Modulation', 'TX1 Fwd Pwr', 'TX2 Fwd Pwr', 'Remarks', 'Initials', 'Tech ID'];
+        const headers = ['Timestamp', 'Site', 'TX Type', 'TX1 Freq Error', 'TX2 Freq Error',
+          'TX1 Fwd Pwr', 'TX2 Fwd Pwr', 'TX1 Refl Pwr', 'TX2 Refl Pwr', 'Tech ID'];
 
-        const inspectionRows = inspections.map(i => [
-          'Inspection', i.timestamp, i.siteName || i.siteId, i.siteCall, i.txType,
+        const rows = inspections.map(i => [
+          i.timestamp, i.siteName || i.siteId, i.txType,
           i.tx1_freq_error || '', i.tx2_freq_error || '',
-          i.tx1_mod_deviation || '', i.tx2_mod_deviation || '',
           i.tx1_ext_fwd || '', i.tx2_ext_fwd || '',
-          '', '', i.techId || ''
+          i.tx1_ext_refl || '', i.tx2_ext_refl || '',
+          i.techId || ''
         ]);
 
-        const logRows = logEntries.map(log => [
-          'Log Entry', log.timestamp, log.siteName, log.siteCall, '', '', '', '', '', '', '',
-          log.remarks || '', log.initials || '', ''
-        ]);
-
-        // Properly escape all fields and join with commas
-        const csv = [headers, ...inspectionRows, ...logRows]
-          .map(row => row.map(escapeCSV).join(','))
-          .join('\n');
+        const csv = [headers, ...rows].map(row => row.map(escapeCSV).join(',')).join('\n');
 
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `nwr-maintenance-data-${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `nwr-analytics-${new Date().toISOString().split('T')[0]}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       };
 
-      const getMetricData = () => {
-        const metricMap = {
-          frequency: { field: 'freq_error', label: 'Frequency Error (Hz)', threshold: 200 },
-          modulation: { field: 'mod_deviation', label: 'Modulation (kHz)', threshold: null },
-          power: { field: 'ext_fwd', label: 'Forward Power (W)', threshold: null }
-        };
-        
-        const metric = metricMap[selectedMetric];
-        const data = inspections.flatMap(i => [
-          { site: i.siteName || i.siteId, date: i.timestamp, value: parseFloat(i[`tx1_${metric.field}`]), tx: 'TX1' },
-          { site: i.siteName || i.siteId, date: i.timestamp, value: parseFloat(i[`tx2_${metric.field}`]), tx: 'TX2' }
-        ]).filter(d => !isNaN(d.value));
+      // Prepare trend chart data based on selected site
+      const getTrendChartData = (metric) => {
+        if (selectedChartSite === 'average') {
+          // Calculate site averages for each inspection date
+          const grouped = {};
+          inspections.forEach(i => {
+            const date = i.timestamp;
+            if (!grouped[date]) grouped[date] = { date, tx1Values: [], tx2Values: [] };
 
-        return { data, metric };
-      };
+            if (metric === 'frequency') {
+              const v1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
+              const v2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            } else if (metric === 'forward') {
+              const v1 = parseFloat(i.tx1_ext_fwd) || 0;
+              const v2 = parseFloat(i.tx2_ext_fwd) || 0;
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            } else if (metric === 'reflected') {
+              const v1 = parseFloat(i.tx1_ext_refl) || 0;
+              const v2 = parseFloat(i.tx2_ext_refl) || 0;
+              grouped[date].tx1Values.push(v1);
+              grouped[date].tx2Values.push(v2);
+            }
+          });
 
-      const { data: metricData, metric } = getMetricData();
-
-      const stats = {
-        total: inspections.length,
-        logEntries: logEntries.length,
-        sites: [...new Set([...inspections.map(i => i.siteId), ...logEntries.map(l => l.siteId)])].length,
-        avgFreqError: inspections.length > 0 ? 
-          (inspections.reduce((sum, i) => sum + Math.abs(parseFloat(i.tx1_freq_error) || 0) + Math.abs(parseFloat(i.tx2_freq_error) || 0), 0) / (inspections.length * 2)).toFixed(1) : 0,
-        outOfSpec: inspections.filter(i => Math.abs(parseFloat(i.tx1_freq_error)) > 200 || Math.abs(parseFloat(i.tx2_freq_error)) > 200).length
+          return Object.values(grouped).map(g => ({
+            date: g.date,
+            tx1Avg: g.tx1Values.length > 0 ? g.tx1Values.reduce((a, b) => a + b, 0) / g.tx1Values.length : 0,
+            tx2Avg: g.tx2Values.length > 0 ? g.tx2Values.reduce((a, b) => a + b, 0) / g.tx2Values.length : 0
+          }));
+        } else {
+          // Individual site data
+          const siteInspections = inspections.filter(i => i.siteId === selectedChartSite);
+          return siteInspections.map(i => {
+            if (metric === 'frequency') {
+              return {
+                date: i.timestamp,
+                tx1: Math.abs(parseFloat(i.tx1_freq_error) || 0),
+                tx2: Math.abs(parseFloat(i.tx2_freq_error) || 0)
+              };
+            } else if (metric === 'forward') {
+              return {
+                date: i.timestamp,
+                tx1: parseFloat(i.tx1_ext_fwd) || 0,
+                tx2: parseFloat(i.tx2_ext_fwd) || 0
+              };
+            } else if (metric === 'reflected') {
+              return {
+                date: i.timestamp,
+                tx1: parseFloat(i.tx1_ext_refl) || 0,
+                tx2: parseFloat(i.tx2_ext_refl) || 0
+              };
+            }
+          });
+        }
       };
 
       if (loading) {
@@ -2365,137 +2470,194 @@
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Icon name="TrendingUp" className="w-6 h-6 text-noaa-sky" /> Trend Analysis
+                <Icon name="BarChart3" className="w-6 h-6 text-noaa-sky" /> Analytics & Site Health
               </h2>
-              <p className="text-sm text-slate-400 mt-1">Real-time inspection data and performance metrics</p>
+              <p className="text-sm text-slate-400 mt-1">Monitor critical metrics and site performance</p>
             </div>
-            <button onClick={exportCSV} 
-              className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
-              <Icon name="Download" className="w-4 h-4" /> Export CSV
-            </button>
+            <div className="flex gap-3">
+              <button onClick={exportCSV}
+                className="px-4 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg flex items-center gap-2 transition-all font-medium">
+                <Icon name="Download" className="w-4 h-4" /> Export CSV
+              </button>
+            </div>
           </div>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Time Range</label>
-              <select value={timeRange} onChange={e => setTimeRange(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="7">Last 7 Days</option>
-                <option value="30">Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-                <option value="365">Last Year</option>
-              </select>
+          {/* Time Range Filter */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+            <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Trend Chart Time Range</label>
+            <select value={timeRange} onChange={e => setTimeRange(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+              <option value="365">Last Year</option>
+            </select>
+          </div>
+
+          {/* Red Flags Section */}
+          {redFlags.length > 0 && (
+            <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/40 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Icon name="AlertTriangle" className="w-6 h-6 text-red-400" />
+                <h3 className="text-lg font-bold text-white">Red Flags - Needs Attention</h3>
+                <span className="ml-auto px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-bold">
+                  {redFlags.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {redFlags.map((flag, idx) => (
+                  <div key={idx} className="flex items-start gap-3 bg-slate-900/50 rounded-lg p-3 border border-red-500/20">
+                    <Icon
+                      name={flag.type === 'overdue' || flag.type === 'never-inspected' ? 'Clock' : flag.type === 'frequency' ? 'Radio' : 'Zap'}
+                      className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"
+                    />
+                    <p className="text-sm text-slate-200">{flag.message}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Site Filter</label>
-              <select value={selectedSite} onChange={e => setSelectedSite(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="all">All Sites</option>
+          )}
+
+          {/* All Clear Message */}
+          {redFlags.length === 0 && (
+            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/40 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <Icon name="CheckCircle" className="w-6 h-6 text-emerald-400" />
+                <h3 className="text-lg font-bold text-white">All Systems Normal</h3>
+              </div>
+              <p className="text-sm text-slate-300 mt-2">No critical issues detected. All sites within acceptable parameters.</p>
+            </div>
+          )}
+
+          {/* Site Health Dashboard */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Icon name="Activity" className="w-5 h-5 text-noaa-sky" /> Site Health Dashboard
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Last Inspected</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Freq</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Freq</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX1 Power</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">TX2 Power</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-semibold">Overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteHealthData.map(site => {
+                    const hasIssue = site.daysSince > 7 || site.tx1FreqOK === false || site.tx2FreqOK === false ||
+                                     site.tx1PowerOK === false || site.tx2PowerOK === false;
+                    return (
+                      <tr key={site.siteId} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td className="py-2 px-3 text-white font-medium">{site.siteName}</td>
+                        <td className="py-2 px-3 text-center">
+                          {site.daysSince === null ? (
+                            <span className="text-slate-500 text-xs">Never</span>
+                          ) : (
+                            <span className={`text-xs font-mono ${site.daysSince > 7 ? 'text-red-400' : 'text-slate-300'}`}>
+                              {site.daysSince}d ago
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx1FreqOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx1FreqOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx2FreqOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx2FreqOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx1PowerOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx1PowerOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.tx2PowerOK === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : site.tx2PowerOK ? (
+                            <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400 mx-auto" />
+                          ) : (
+                            <Icon name="XCircle" className="w-4 h-4 text-red-400 mx-auto" />
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {site.daysSince === null ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/50 text-slate-400 rounded-full text-xs font-medium">
+                              <Icon name="HelpCircle" className="w-3 h-3" /> No Data
+                            </span>
+                          ) : hasIssue ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
+                              <Icon name="AlertTriangle" className="w-3 h-3" /> Issue
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
+                              <Icon name="CheckCircle" className="w-3 h-3" /> Good
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Frequency Error Trend Chart */}
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="Radio" className="w-5 h-5 text-cyan-400" /> Frequency Error Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
                 {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-              <label className="block text-xs text-slate-400 uppercase font-semibold mb-2">Metric</label>
-              <select value={selectedMetric} onChange={e => setSelectedMetric(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-2.5 text-sm">
-                <option value="frequency">Frequency Error</option>
-                <option value="modulation">Modulation Deviation</option>
-                <option value="power">Forward Power</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="FileText" className="w-8 h-8 text-blue-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.total}</p>
-                  <p className="text-xs text-slate-400 uppercase">Inspections</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="ScrollText" className="w-8 h-8 text-amber-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.logEntries}</p>
-                  <p className="text-xs text-slate-400 uppercase">Log Entries</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="Radio" className="w-8 h-8 text-emerald-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.sites}</p>
-                  <p className="text-xs text-slate-400 uppercase">Sites Covered</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border border-cyan-500/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Icon name="Activity" className="w-8 h-8 text-cyan-400" />
-                <div>
-                  <p className="text-2xl font-bold text-white">±{stats.avgFreqError} Hz</p>
-                  <p className="text-xs text-slate-400 uppercase">Avg Freq Error</p>
-                </div>
-              </div>
-            </div>
-            <div className={`bg-gradient-to-br ${stats.outOfSpec > 0 ? 'from-red-500/10 to-red-600/5 border-red-500/30' : 'from-emerald-500/10 to-emerald-600/5 border-emerald-500/30'} border rounded-xl p-4`}>
-              <div className="flex items-center gap-3">
-                <Icon name={stats.outOfSpec > 0 ? "AlertTriangle" : "CheckCircle"} className={`w-8 h-8 ${stats.outOfSpec > 0 ? 'text-red-400' : 'text-emerald-400'}`} />
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.outOfSpec}</p>
-                  <p className="text-xs text-slate-400 uppercase">Out of Spec</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Chart */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4">{metric.label} Over Time</h3>
-            {metricData.length > 0 ? (
+            {inspections.length > 0 ? (
               <div className="space-y-4">
-                {[...new Set(metricData.map(d => d.site))].map(site => {
-                  const siteData = metricData.filter(d => d.site === site);
+                {getTrendChartData('frequency').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
                   return (
-                    <div key={site} className="border-b border-slate-700/50 pb-4 last:border-0">
-                      <p className="text-sm font-bold text-slate-300 mb-2">{site}</p>
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
                       <div className="grid grid-cols-2 gap-4">
-                        {['TX1', 'TX2'].map(tx => {
-                          const txData = siteData.filter(d => d.tx === tx);
-                          const avg = txData.length > 0 ? (txData.reduce((sum, d) => sum + d.value, 0) / txData.length).toFixed(2) : 'N/A';
-                          const min = txData.length > 0 ? Math.min(...txData.map(d => d.value)).toFixed(2) : 'N/A';
-                          const max = txData.length > 0 ? Math.max(...txData.map(d => d.value)).toFixed(2) : 'N/A';
-                          
-                          return (
-                            <div key={tx} className="bg-slate-900/50 rounded-lg p-3">
-                              <p className="text-xs font-bold text-noaa-sky mb-2">{tx}</p>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Avg:</span>
-                                  <span className="text-white font-mono">{avg}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Min:</span>
-                                  <span className="text-emerald-400 font-mono">{min}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Max:</span>
-                                  <span className="text-red-400 font-mono">{max}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-400">Count:</span>
-                                  <span className="text-white font-mono">{txData.length}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-cyan-400 mb-1">TX1</p>
+                          <p className={`text-lg font-mono ${tx1Val > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tx1Val.toFixed(1)} Hz
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-cyan-400 mb-1">TX2</p>
+                          <p className={`text-lg font-mono ${tx2Val > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tx2Val.toFixed(1)} Hz
+                          </p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -2504,119 +2666,105 @@
             ) : (
               <div className="text-center py-12">
                 <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400">No inspection data available for selected filters</p>
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
 
-          {/* Recent Inspections Table */}
+          {/* Forward Power Trend Chart */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Icon name="Clock" className="w-5 h-5 text-noaa-sky" /> Recent Inspections
-            </h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="Zap" className="w-5 h-5 text-amber-400" /> Forward Power Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
+                {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
             {inspections.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Date</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">TX Type</th>
-                      <th className="text-right py-2 px-3 text-slate-400 font-semibold">TX1 Freq</th>
-                      <th className="text-right py-2 px-3 text-slate-400 font-semibold">TX2 Freq</th>
-                      <th className="text-center py-2 px-3 text-slate-400 font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inspections.slice(0, 15).map(i => {
-                      const freq1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
-                      const freq2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
-                      const isSpec = freq1 <= 200 && freq2 <= 200;
-                      
-                      return (
-                        <tr key={i.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          <td className="py-2 px-3 text-slate-300 font-mono text-xs">
-                            {new Date(i.timestamp).toLocaleDateString()}
-                          </td>
-                          <td className="py-2 px-3 text-white">{i.siteName || i.siteId}</td>
-                          <td className="py-2 px-3 text-slate-300 capitalize">{i.txType}</td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span className={freq1 > 200 ? 'text-red-400' : 'text-emerald-400'}>
-                              {i.tx1_freq_error || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span className={freq2 > 200 ? 'text-red-400' : 'text-emerald-400'}>
-                              {i.tx2_freq_error || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            {isSpec ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
-                                <Icon name="CheckCircle" className="w-3 h-3" /> In Spec
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
-                                <Icon name="AlertTriangle" className="w-3 h-3" /> Out of Spec
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                {getTrendChartData('forward').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
+                  return (
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-amber-400 mb-1">TX1</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx1Val.toFixed(1)} W
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-amber-400 mb-1">TX2</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx2Val.toFixed(1)} W
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-slate-400">No recent inspections found</p>
+              <div className="text-center py-12">
+                <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
 
-          {/* Recent Maintenance Log Activity */}
+          {/* Reflected Power Trend Chart */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Icon name="ScrollText" className="w-5 h-5 text-amber-400" /> Recent Maintenance Activity
-            </h3>
-            {logEntries.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Date</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Time</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Site</th>
-                      <th className="text-left py-2 px-3 text-slate-400 font-semibold">Remarks</th>
-                      <th className="text-center py-2 px-3 text-slate-400 font-semibold">Initials</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logEntries.slice(0, 15).map(log => (
-                      <tr key={log.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                        <td className="py-2 px-3 text-slate-300 font-mono text-xs">
-                          {new Date(log.timestamp).toLocaleDateString()}
-                        </td>
-                        <td className="py-2 px-3 text-slate-300 font-mono text-xs">{log.time}</td>
-                        <td className="py-2 px-3">
-                          <div className="text-white text-sm">{log.siteName}</div>
-                          <div className="text-slate-500 text-xs font-mono">{log.siteCall}</div>
-                        </td>
-                        <td className="py-2 px-3 text-slate-300">{log.remarks}</td>
-                        <td className="py-2 px-3 text-center">
-                          <span className="inline-flex items-center px-2 py-1 bg-slate-700 text-white rounded text-xs font-bold">
-                            {log.initials}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Icon name="AlertCircle" className="w-5 h-5 text-red-400" /> Reflected Power Trend
+              </h3>
+              <select value={selectedChartSite} onChange={e => setSelectedChartSite(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm">
+                <option value="average">Site Average</option>
+                {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {inspections.length > 0 ? (
+              <div className="space-y-4">
+                {getTrendChartData('reflected').map((dataPoint, idx) => {
+                  const isAverage = selectedChartSite === 'average';
+                  const tx1Val = isAverage ? dataPoint.tx1Avg : dataPoint.tx1;
+                  const tx2Val = isAverage ? dataPoint.tx2Avg : dataPoint.tx2;
+                  return (
+                    <div key={idx} className="border-b border-slate-700/50 pb-3 last:border-0">
+                      <p className="text-xs text-slate-400 font-mono mb-2">
+                        {new Date(dataPoint.date).toLocaleDateString()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-red-400 mb-1">TX1</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx1Val.toFixed(1)} W
+                          </p>
+                        </div>
+                        <div className="bg-slate-900/50 rounded-lg p-3">
+                          <p className="text-xs font-bold text-red-400 mb-1">TX2</p>
+                          <p className="text-lg font-mono text-white">
+                            {tx2Val.toFixed(1)} W
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <Icon name="ScrollText" className="w-12 h-12 text-slate-600 mx-auto mb-3 opacity-30" />
-                <p className="text-slate-400">No maintenance log entries found</p>
+              <div className="text-center py-12">
+                <Icon name="BarChart3" className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No data available for selected time range</p>
               </div>
             )}
           </div>
