@@ -2109,6 +2109,271 @@
       );
     };
 
+    // Site Status Overview Component (for Dashboard)
+    const SiteStatusOverview = () => {
+      const [siteStatuses, setSiteStatuses] = useState({});
+      const [siteRemarks, setSiteRemarks] = useState({});
+      const [selectedSite, setSelectedSite] = useState(null);
+      const [inspections, setInspections] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      // Load site statuses from Firebase
+      useEffect(() => {
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('site_statuses')
+          .onSnapshot(snapshot => {
+            const statuses = {};
+            const remarks = {};
+            snapshot.docs.forEach(doc => {
+              const data = doc.data();
+              statuses[doc.id] = data.status || 'online';
+              remarks[doc.id] = data.remarks || '';
+            });
+            setSiteStatuses(statuses);
+            setSiteRemarks(remarks);
+          }, error => {
+            console.error('Error loading site statuses:', error);
+          });
+
+        return () => unsubscribe();
+      }, []);
+
+      // Load inspections
+      useEffect(() => {
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections')
+          .orderBy('timestamp', 'desc')
+          .onSnapshot(snapshot => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setInspections(data);
+            setLoading(false);
+          }, error => {
+            console.error('Error fetching inspections:', error);
+            setLoading(false);
+          });
+        return () => unsubscribe();
+      }, []);
+
+      const getLatestInspection = (siteId) => {
+        return inspections.find(i => i.siteId === siteId);
+      };
+
+      const statusConfig = {
+        online: { icon: 'Smile', color: 'text-emerald-400', bg: 'from-emerald-500/20 to-emerald-600/10', border: 'border-emerald-500/40' },
+        degraded: { icon: 'Meh', color: 'text-amber-400', bg: 'from-amber-500/20 to-amber-600/10', border: 'border-amber-500/40' },
+        offline: { icon: 'Frown', color: 'text-red-400', bg: 'from-red-500/20 to-red-600/10', border: 'border-red-500/40' }
+      };
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center h-64">
+            <Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" />
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 animate-in">
+          {/* Header */}
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Icon name="Activity" className="w-5 h-5 text-noaa-sky" /> Site Status Overview
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">Click any site to view detailed health metrics</p>
+          </div>
+
+          {/* 12 Site Status Cards - Scaled for Dashboard */}
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {SITES.map(site => {
+              const status = siteStatuses[site.id] || 'online';
+              const config = statusConfig[status];
+
+              return (
+                <div
+                  key={site.id}
+                  onClick={() => setSelectedSite(site.id)}
+                  className={`bg-gradient-to-br ${config.bg} border ${config.border} rounded-lg p-3 cursor-pointer hover:scale-105 transition-transform duration-200`}
+                >
+                  <div className="text-center">
+                    <Icon name={config.icon} className={`w-12 h-12 mx-auto mb-2 ${config.color}`} />
+                    <h3 className="font-bold text-white text-xs mb-0.5">{site.name}</h3>
+                    <p className="text-xs font-mono text-slate-400">{site.call}</p>
+                    <p className={`text-[10px] font-semibold ${config.color} mt-1 uppercase`}>
+                      {status}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Site Health Detail Modal */}
+          {selectedSite && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedSite(null)}>
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                {/* Modal Header */}
+                <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex justify-between items-center z-10">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <Icon name="Activity" className="w-6 h-6 text-noaa-sky" />
+                      {SITES.find(s => s.id === selectedSite)?.name} - Health Metrics
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-1">
+                      {SITES.find(s => s.id === selectedSite)?.call}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedSite(null)}
+                    className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    <Icon name="X" className="w-6 h-6 text-slate-400" />
+                  </button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6 space-y-6">
+                  {(() => {
+                    const latestInspection = getLatestInspection(selectedSite);
+                    const site = SITES.find(s => s.id === selectedSite);
+                    const status = siteStatuses[selectedSite] || 'online';
+                    const config = statusConfig[status];
+
+                    if (!latestInspection) {
+                      return (
+                        <div className="text-center py-12">
+                          <Icon name="FileText" className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                          <p className="text-slate-400">No inspection data available for this site</p>
+                        </div>
+                      );
+                    }
+
+                    // Calculate frequency error from inspection data
+                    const assignedFreqMHz = parseFloat(site.freq);
+                    const measuredFreq1 = parseFloat(latestInspection.freq_final_1) || 0;
+                    const measuredFreq2 = parseFloat(latestInspection.freq_final_2) || 0;
+                    const freq1 = Math.abs((measuredFreq1 - assignedFreqMHz) * 1000000);
+                    const freq2 = Math.abs((measuredFreq2 - assignedFreqMHz) * 1000000);
+                    const fwd1 = parseFloat(latestInspection.tx1_ext_fwd) || 0;
+                    const fwd2 = parseFloat(latestInspection.tx2_ext_fwd) || 0;
+                    const refl1 = parseFloat(latestInspection.tx1_ext_refl) || 0;
+                    const refl2 = parseFloat(latestInspection.tx2_ext_refl) || 0;
+                    const refl1Pct = fwd1 > 0 ? ((refl1 / fwd1) * 100) : 0;
+                    const refl2Pct = fwd2 > 0 ? ((refl2 / fwd2) * 100) : 0;
+
+                    return (
+                      <>
+                        {/* Current Status */}
+                        <div className={`bg-gradient-to-br ${config.bg} border ${config.border} rounded-xl p-6 text-center`}>
+                          <Icon name={config.icon} className={`w-20 h-20 mx-auto mb-3 ${config.color}`} />
+                          <h3 className={`text-2xl font-bold ${config.color} uppercase`}>
+                            {status}
+                          </h3>
+                        </div>
+
+                        {/* Remarks (if degraded or offline) */}
+                        {(status === 'degraded' || status === 'offline') && siteRemarks[selectedSite] && (
+                          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                            <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                              <Icon name="MessageSquare" className="w-4 h-4 text-amber-400" /> Remarks
+                            </h3>
+                            <p className="text-sm text-slate-300">{siteRemarks[selectedSite]}</p>
+                          </div>
+                        )}
+
+                        {/* Last Inspection Info */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Calendar" className="w-4 h-4 text-noaa-sky" /> Latest Inspection
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-slate-500">Date</p>
+                              <p className="text-white">{latestInspection.date}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Technician</p>
+                              <p className="text-white">{latestInspection.tech || latestInspection.techId}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Frequency Error */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Radio" className="w-4 h-4 text-cyan-400" /> Frequency Error
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-cyan-400 font-bold mb-1">TX1</p>
+                              <p className={`text-2xl font-mono ${freq1 > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {freq1.toFixed(1)} Hz
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">Threshold: 200 Hz</p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-cyan-400 font-bold mb-1">TX2</p>
+                              <p className={`text-2xl font-mono ${freq2 > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {freq2.toFixed(1)} Hz
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">Threshold: 200 Hz</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Forward Power */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="Zap" className="w-4 h-4 text-amber-400" /> Forward Power
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-amber-400 font-bold mb-1">TX1</p>
+                              <p className="text-2xl font-mono text-white">{fwd1.toFixed(1)} W</p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-amber-400 font-bold mb-1">TX2</p>
+                              <p className="text-2xl font-mono text-white">{fwd2.toFixed(1)} W</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reflected Power */}
+                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+                            <Icon name="AlertCircle" className="w-4 h-4 text-red-400" /> Reflected Power
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-red-400 font-bold mb-1">TX1</p>
+                              <p className={`text-2xl font-mono ${refl1Pct > 3 ? 'text-red-400' : 'text-white'}`}>
+                                {refl1.toFixed(1)} W
+                              </p>
+                              <p className={`text-xs mt-1 ${refl1Pct > 3 ? 'text-red-400' : 'text-slate-500'}`}>
+                                {refl1Pct.toFixed(1)}% of forward (threshold: 3%)
+                              </p>
+                            </div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <p className="text-xs text-red-400 font-bold mb-1">TX2</p>
+                              <p className={`text-2xl font-mono ${refl2Pct > 3 ? 'text-red-400' : 'text-white'}`}>
+                                {refl2.toFixed(1)} W
+                              </p>
+                              <p className={`text-xs mt-1 ${refl2Pct > 3 ? 'text-red-400' : 'text-slate-500'}`}>
+                                {refl2Pct.toFixed(1)}% of forward (threshold: 3%)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     // Dashboard
     const Dashboard = ({ setTab }) => {
       const [events, setEvents] = useState([]);
@@ -2167,7 +2432,7 @@
           <div className="grid lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3 space-y-6">
               <SiteMap />
-              <MaintenanceCalendar />
+              <SiteStatusOverview />
             </div>
             <div className="space-y-4">
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
@@ -2516,6 +2781,19 @@
               </div>
             </div>
           )}
+        </div>
+      );
+    };
+
+    // Maintenance Schedule (Full-screen calendar)
+    const MaintenanceSchedule = () => {
+      return (
+        <div className="space-y-6 animate-in">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="Calendar" className="w-6 h-6 text-noaa-sky" />
+            <h2 className="text-2xl font-bold text-white">Maintenance Schedule</h2>
+          </div>
+          <MaintenanceCalendar />
         </div>
       );
     };
@@ -3636,7 +3914,7 @@
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
         { id: 'forms', label: 'Inspection', icon: 'ClipboardList' },
         { id: 'history', label: 'History', icon: 'Archive' },
-        { id: 'analytics', label: 'Analytics', icon: 'TrendingUp' },
+        { id: 'schedule', label: 'Schedule', icon: 'Calendar' },
         { id: 'resources', label: 'Resources', icon: 'FolderOpen' },
         { id: 'sites', label: 'Sites', icon: 'Radio' }
       ];
@@ -3730,7 +4008,7 @@
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
             {tab === 'forms' && <InspectionForm user={user} userRole={userRole} editingInspection={editingInspection} setEditingInspection={setEditingInspection} />}
             {tab === 'history' && <PastInspections setTab={setTab} setEditingInspection={setEditingInspection} userRole={userRole} />}
-            {tab === 'analytics' && <Analytics />}
+            {tab === 'schedule' && <MaintenanceSchedule />}
             {tab === 'resources' && <Resources userRole={userRole} />}
             {tab === 'sites' && <SitesList userRole={userRole} />}
           </main>
