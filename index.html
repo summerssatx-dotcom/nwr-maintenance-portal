@@ -3772,6 +3772,8 @@
       const [emailInput, setEmailInput] = useState('');
       const [passwordInput, setPasswordInput] = useState('');
       const [loggingIn, setLoggingIn] = useState(false);
+      const [showResetMode, setShowResetMode] = useState(false);
+      const [resetEmail, setResetEmail] = useState('');
       const [editingInspection, setEditingInspection] = useState(null);
 
       // Listen for authentication state changes
@@ -3839,6 +3841,31 @@
         }
       };
 
+      const handlePasswordReset = async (e) => {
+        e.preventDefault();
+        setLoggingIn(true);
+
+        try {
+          await auth.sendPasswordResetEmail(resetEmail);
+          alert('✓ Password reset email sent! Check your inbox for instructions.');
+          setShowResetMode(false);
+          setResetEmail('');
+        } catch (error) {
+          console.error('Password reset error:', error);
+          let errorMessage = 'Failed to send reset email. Please try again.';
+
+          if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email address.';
+          } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+          }
+
+          alert('❌ ' + errorMessage);
+        } finally {
+          setLoggingIn(false);
+        }
+      };
+
       const handleSignOut = () => {
         auth.signOut();
       };
@@ -3855,57 +3882,119 @@
               <h1 className="text-2xl font-bold text-white mb-2">NWR Maintenance Portal</h1>
               <p className="text-noaa-sky text-sm">EHB-7 Technician Portal</p>
             </div>
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
-                <div className="relative">
-                  <Icon name="Mail" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="username@nwr.local"
-                    className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
-                    autoFocus
-                    required
-                  />
+
+            {showResetMode ? (
+              // Password Reset Form
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                  <div className="relative">
+                    <Icon name="Mail" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-2">We'll send you a link to reset your password</p>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
-                <div className="relative">
-                  <Icon name="Lock" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={loggingIn}
-                className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loggingIn ? (
-                  <>
-                    <Icon name="Loader2" className="w-5 h-5 animate-spin" />
-                    Signing In...
-                  </>
-                ) : (
-                  <>
-                    <Icon name="LogIn" className="w-5 h-5" />
-                    Sign In
-                  </>
-                )}
-              </button>
-            </form>
-            <p className="text-xs text-slate-500 text-center mt-6">
-              Authorized personnel only • Contact administrator for access
-            </p>
+                <button
+                  type="submit"
+                  disabled={loggingIn}
+                  className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loggingIn ? (
+                    <>
+                      <Icon name="Loader2" className="w-5 h-5 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="Mail" className="w-5 h-5" />
+                      Send Reset Link
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetMode(false);
+                    setResetEmail('');
+                  }}
+                  className="w-full text-noaa-sky hover:text-noaa-light text-sm font-medium transition-colors"
+                >
+                  ← Back to Sign In
+                </button>
+              </form>
+            ) : (
+              // Login Form
+              <>
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                    <div className="relative">
+                      <Icon name="Mail" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="username@nwr.local"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                        autoFocus
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-slate-300">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowResetMode(true)}
+                        className="text-xs text-noaa-sky hover:text-noaa-light transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Icon name="Lock" className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="password"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full pl-11 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-noaa-sky outline-none transition-colors"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loggingIn}
+                    className="w-full bg-noaa-sky hover:bg-noaa-light text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loggingIn ? (
+                      <>
+                        <Icon name="Loader2" className="w-5 h-5 animate-spin" />
+                        Signing In...
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="LogIn" className="w-5 h-5" />
+                        Sign In
+                      </>
+                    )}
+                  </button>
+                </form>
+                <p className="text-xs text-slate-500 text-center mt-6">
+                  Authorized personnel only • Contact administrator for access
+                </p>
+              </>
+            )}
           </div>
         </div>
       );
