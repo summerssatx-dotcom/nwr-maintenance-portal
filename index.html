@@ -2819,26 +2819,42 @@
             const storageRef = storage.ref('Resources');
             const result = await storageRef.listAll();
 
-            // Get files from all subfolders (Armstrong, Crown, Nautel)
-            const allFiles = [];
-            for (const folderRef of result.prefixes) {
+            // Get files from all subfolders (Armstrong, Crown, Nautel) in parallel
+            const folderPromises = result.prefixes.map(async (folderRef) => {
               const folderResult = await folderRef.listAll();
               const folderName = folderRef.name; // Armstrong, Crown, or Nautel
 
-              for (const itemRef of folderResult.items) {
-                const url = await itemRef.getDownloadURL();
-                const metadata = await itemRef.getMetadata();
+              // Process all files in this folder in parallel
+              const filePromises = folderResult.items.map(async (itemRef) => {
+                try {
+                  // Fetch URL and metadata in parallel
+                  const [url, metadata] = await Promise.all([
+                    itemRef.getDownloadURL(),
+                    itemRef.getMetadata()
+                  ]);
 
-                allFiles.push({
-                  name: itemRef.name,
-                  url: url,
-                  size: metadata.size,
-                  type: metadata.contentType,
-                  category: folderName,
-                  updated: metadata.updated
-                });
-              }
-            }
+                  return {
+                    name: itemRef.name,
+                    url: url,
+                    size: metadata.size,
+                    type: metadata.contentType,
+                    category: folderName,
+                    updated: metadata.updated
+                  };
+                } catch (error) {
+                  console.error(`Error loading file ${itemRef.name}:`, error);
+                  return null;
+                }
+              });
+
+              return Promise.all(filePromises);
+            });
+
+            // Wait for all folders to finish loading
+            const allFolderResults = await Promise.all(folderPromises);
+
+            // Flatten array and filter out null values
+            const allFiles = allFolderResults.flat().filter(file => file !== null);
 
             setResources(allFiles);
             setLoading(false);
