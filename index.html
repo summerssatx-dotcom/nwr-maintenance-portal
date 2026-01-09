@@ -2812,10 +2812,25 @@
         { id: 'Nautel', name: 'Nautel Transmitters', icon: 'Radio', color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
       ];
 
-      // Load resources from Firebase Storage
+      // Load resources from Firebase Storage with caching
       useEffect(() => {
         const loadResources = async () => {
           try {
+            // Try to load from cache first for instant display
+            const cached = localStorage.getItem('nwr_resources_cache');
+            const cacheTimestamp = localStorage.getItem('nwr_resources_cache_time');
+            const cacheAge = cacheTimestamp ? Date.now() - parseInt(cacheTimestamp) : Infinity;
+            const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+            // Show cached data immediately if available and not too old
+            if (cached && cacheAge < CACHE_DURATION) {
+              const cachedData = JSON.parse(cached);
+              setResources(cachedData);
+              setLoading(false);
+              return; // Use cache, skip Firebase fetch
+            }
+
+            // If cache is stale or missing, fetch from Firebase
             const storageRef = storage.ref('Resources');
             const result = await storageRef.listAll();
 
@@ -2855,6 +2870,10 @@
 
             // Flatten array and filter out null values
             const allFiles = allFolderResults.flat().filter(file => file !== null);
+
+            // Cache the results for next time
+            localStorage.setItem('nwr_resources_cache', JSON.stringify(allFiles));
+            localStorage.setItem('nwr_resources_cache_time', Date.now().toString());
 
             setResources(allFiles);
             setLoading(false);
@@ -2896,6 +2915,9 @@
               alert('✓ File uploaded successfully!');
               setUploading(false);
               setUploadProgress(0);
+              // Clear cache to force refresh
+              localStorage.removeItem('nwr_resources_cache');
+              localStorage.removeItem('nwr_resources_cache_time');
               // Reload resources
               window.location.reload();
             }
@@ -2920,6 +2942,9 @@
           const storageRef = storage.ref(`resources/${resource.category}/${resource.name}`);
           await storageRef.delete();
           alert('✓ File deleted successfully!');
+          // Clear cache to force refresh on next load
+          localStorage.removeItem('nwr_resources_cache');
+          localStorage.removeItem('nwr_resources_cache_time');
           setResources(resources.filter(r => r.name !== resource.name));
         } catch (error) {
           console.error('Delete error:', error);
