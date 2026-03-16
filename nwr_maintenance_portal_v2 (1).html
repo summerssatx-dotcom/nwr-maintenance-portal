@@ -2255,50 +2255,6 @@
       </div>
     );
 
-    // Resources Tab
-    const ResourcesTab = () => {
-      const resources = [
-        { category: 'NOAA Documentation', items: [
-          { label: 'NWR Program Office', url: 'https://www.weather.gov/nwr/', desc: 'Official NWR program information' },
-          { label: 'EHB-7 Technical Manual', url: 'https://www.weather.gov/media/nwr/EHB7.pdf', desc: 'NWR technical operations manual' },
-          { label: 'NWRUP Ticket System', url: 'https://nwrup.weather.gov/', desc: 'Create and track trouble tickets' },
-        ]},
-        { category: 'Transmitter Manuals', items: [
-          { label: 'Armstrong Classic Manual', url: 'https://www.armstrongtransmitters.com/', desc: 'Armstrong transmitter documentation' },
-          { label: 'Nautel Transmitter Support', url: 'https://www.nautel.com/support/', desc: 'Nautel technical support & manuals' },
-          { label: 'Crown Broadcast Support', url: 'https://www.crownbroadcast.com/', desc: 'Crown transmitter documentation' },
-        ]},
-        { category: 'EWX References', items: [
-          { label: 'WFO San Antonio (EWX)', url: 'https://www.weather.gov/ewx/', desc: 'Local WFO homepage' },
-          { label: 'NOAA Weather Radio', url: 'https://www.weather.gov/nwr/station_listing', desc: 'NWR station listings' },
-        ]},
-      ];
-      return (
-        <div className="space-y-6 animate-in">
-          <div className="flex items-center gap-2 mb-2">
-            <Icon name="BookOpen" className="w-5 h-5 text-noaa-sky" />
-            <h2 className="text-xl font-bold text-white">Resources</h2>
-          </div>
-          {resources.map(group => (
-            <div key={group.category} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-              <h3 className="font-bold text-white mb-4 text-sm uppercase tracking-wider text-noaa-sky">{group.category}</h3>
-              <div className="space-y-3">
-                {group.items.map(item => (
-                  <a key={item.label} href={item.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg hover:border-noaa-sky/50 transition-all group">
-                    <div>
-                      <p className="font-medium text-white group-hover:text-noaa-sky transition-colors">{item.label}</p>
-                      <p className="text-xs text-slate-500">{item.desc}</p>
-                    </div>
-                    <Icon name="ExternalLink" className="w-4 h-4 text-slate-500 group-hover:text-noaa-sky transition-colors" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    };
 
     // Admin Tab
     const AdminTab = () => {
@@ -2524,7 +2480,6 @@
         { id: 'forms', label: 'Inspection', icon: 'ClipboardList' },
         { id: 'history', label: 'History', icon: 'History' },
         { id: 'schedule', label: 'Schedule', icon: 'CalendarDays' },
-        { id: 'resources', label: 'Resources', icon: 'BookOpen' },
         { id: 'sites', label: 'Sites', icon: 'Radio' },
       ];
 
@@ -2579,7 +2534,6 @@
             {tab === 'forms' && <InspectionForm user={user} />}
             {tab === 'history' && <HistoryTab />}
             {tab === 'schedule' && <ScheduleTab />}
-            {tab === 'resources' && <ResourcesTab />}
             {tab === 'analytics' && <Analytics />}
             {tab === 'sites' && <SitesList />}
           </main>
