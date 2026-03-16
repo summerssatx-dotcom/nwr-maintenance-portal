@@ -8,6 +8,9 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -41,6 +44,20 @@
   
   <script type="text/babel">
     const { useState, useEffect, useRef, Fragment } = React;
+
+    // Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBRksEHIm6yT0M21HyOnizi4YRqPoRAuoo",
+      authDomain: "nwr-maintenance-v2.firebaseapp.com",
+      projectId: "nwr-maintenance-v2",
+      storageBucket: "nwr-maintenance-v2.firebasestorage.app",
+      messagingSenderId: "855106065084",
+      appId: "1:855106065084:web:0b9123a5d6dbff0756f6b9"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const appId = 'nwr-maintenance-v2';
 
 
     // Icons
@@ -591,7 +608,7 @@
       );
     };
 
-    const InspectionForm = () => {
+    const InspectionForm = ({ user }) => {
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
@@ -617,12 +634,11 @@
       const save = async () => {
         setSaving(true);
         try {
-          const inspections = JSON.parse(localStorage.getItem('nwr-inspections') || '[]');
-          inspections.push({
-            ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-            timestamp: new Date().toISOString()
-          });
-          localStorage.setItem('nwr-inspections', JSON.stringify(inspections));
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('inspections').add({
+              ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
+              timestamp: new Date().toISOString(), techId: user?.uid
+            });
           alert('✓ Saved!');
           setStep(1); setData({}); setTxType(null);
         } catch (e) { alert('Error: ' + e.message); }
@@ -1846,16 +1862,17 @@
       const [selectedMetric, setSelectedMetric] = useState('frequency');
 
       useEffect(() => {
-        const fetchInspections = () => {
+        const fetchInspections = async () => {
           try {
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
-            const all = JSON.parse(localStorage.getItem('nwr-inspections') || '[]');
-            let filtered = all.filter(d => new Date(d.timestamp) >= cutoff);
-            if (selectedSite !== 'all') {
-              filtered = filtered.filter(d => d.siteId === selectedSite);
-            }
-            setInspections(filtered);
+            let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').orderBy('timestamp', 'desc');
+            if (selectedSite !== 'all') query = query.where('siteId', '==', selectedSite);
+            const snapshot = await query.get();
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+              .filter(d => new Date(d.timestamp) >= cutoff);
+            setInspections(data);
           } catch (e) {
             console.error('Error fetching:', e);
           }
@@ -1863,6 +1880,9 @@
         };
 
         fetchInspections();
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections').onSnapshot(() => fetchInspections());
+        return () => unsubscribe();
       }, [timeRange, selectedSite]);
 
       // Load and filter maintenance log entries
@@ -2483,7 +2503,21 @@
 
     // App
     function App() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
       const [tab, setTab] = useState('dashboard');
+
+      useEffect(() => {
+        const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+        auth.signInAnonymously().catch(() => setLoading(false));
+        return unsub;
+      }, []);
+
+      if (loading) return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+          <Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" />
+        </div>
+      );
 
       const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -2543,7 +2577,7 @@
           </header>
           <main className="max-w-7xl mx-auto px-4 py-6">
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
-            {tab === 'forms' && <InspectionForm />}
+            {tab === 'forms' && <InspectionForm user={user} />}
             {tab === 'history' && <HistoryTab />}
             {tab === 'schedule' && <ScheduleTab />}
             {tab === 'resources' && <ResourcesTab />}
