@@ -1732,34 +1732,35 @@
         return saved ? JSON.parse(saved) : {};
       });
       const getStatus = (id) => statuses[id] || 'ONLINE';
-      const cycleStatus = (id) => {
-        const order = ['ONLINE', 'DEGRADED', 'OFFLINE'];
-        const next = order[(order.indexOf(getStatus(id)) + 1) % order.length];
-        const updated = { ...statuses, [id]: next };
+      const updateStatus = (id, value) => {
+        const updated = { ...statuses, [id]: value };
         setStatuses(updated);
         localStorage.setItem('nwr-site-status', JSON.stringify(updated));
       };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
-      const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/60' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/60' : 'border-red-500/30 bg-red-500/5 hover:border-red-500/60';
+      const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
       const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
       return (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Icon name="Activity" className="w-4 h-4 text-noaa-sky" />
             <h3 className="font-bold text-white">Site Status Overview</h3>
-            <p className="text-xs text-slate-500 ml-1">Click a site card to cycle status</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {SITES.map(site => {
               const s = getStatus(site.id);
               return (
-                <button key={site.id} onClick={() => cycleStatus(site.id)}
-                  className={`rounded-xl border p-3 text-center transition-all cursor-pointer ${statusBg(s)}`}>
+                <div key={site.id} className={`rounded-xl border p-3 text-center ${statusBg(s)}`}>
                   <Icon name={faceIcon(s)} className={`w-8 h-8 mx-auto mb-1 ${statusColor(s)}`} />
                   <p className="font-bold text-white text-sm">{site.name}</p>
                   <p className="text-slate-500 text-xs">{site.call}</p>
-                  <p className={`text-xs font-bold mt-1 ${statusColor(s)}`}>{s}</p>
-                </button>
+                  <select value={s} onChange={e => updateStatus(site.id, e.target.value)}
+                    className="mt-1 w-full text-xs font-bold rounded px-1 py-0.5 bg-slate-900 border border-slate-600 text-white cursor-pointer">
+                    <option value="ONLINE">ONLINE</option>
+                    <option value="DEGRADED">DEGRADED</option>
+                    <option value="OFFLINE">OFFLINE</option>
+                  </select>
+                </div>
               );
             })}
           </div>
@@ -2512,8 +2513,8 @@
               
               <div className="relative max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <img src="https://www.weather.gov/images/nwr/NWR_logo.png" alt="NOAA Weather Radio"
-                    className="w-16 h-16 rounded-2xl shadow-2xl shadow-noaa-blue/40 object-contain bg-white/95 p-1" />
+                  <img src="NWR.png" alt="NOAA Weather Radio"
+                    className="w-16 h-16 rounded-2xl shadow-2xl shadow-noaa-blue/40 object-contain" />
                   <div>
                     <h1 className="font-black text-white text-3xl tracking-tight drop-shadow-lg" style={{textShadow: '0 2px 12px rgba(0,0,0,0.6)'}}>
                       NWRManager
