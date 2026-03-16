@@ -1469,12 +1469,17 @@
       const [currentDate, setCurrentDate] = useState(new Date());
       const [events, setEvents] = useState(() => {
         const saved = localStorage.getItem('nwr_calendar_events');
-        return saved ? JSON.parse(saved) : [
-          { id: 1, date: '2025-11-29', siteId: 'AUS', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 2, date: '2025-11-30', siteId: 'SAT', type: 'routine', completed: false, notes: 'Annual inspection' },
-          { id: 3, date: '2025-12-02', siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
-          { id: 4, date: '2025-12-05', siteId: 'GNZ', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 5, date: '2025-11-25', siteId: 'DRT', type: 'routine', completed: true, notes: 'Completed inspection' },
+        if (saved) return JSON.parse(saved);
+        const d = (offset) => {
+          const dt = new Date(); dt.setDate(dt.getDate() + offset);
+          return dt.toISOString().split('T')[0];
+        };
+        return [
+          { id: 1, date: d(3),  siteId: 'AUS', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
+          { id: 2, date: d(7),  siteId: 'SAT', type: 'routine',    completed: false, notes: 'Annual inspection' },
+          { id: 3, date: d(10), siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
+          { id: 4, date: d(14), siteId: 'GNZ', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
+          { id: 5, date: d(-3), siteId: 'DRT', type: 'routine',    completed: true,  notes: 'Completed inspection' },
         ];
       });
       const [showModal, setShowModal] = useState(false);
@@ -1727,26 +1732,34 @@
         return saved ? JSON.parse(saved) : {};
       });
       const getStatus = (id) => statuses[id] || 'ONLINE';
+      const cycleStatus = (id) => {
+        const order = ['ONLINE', 'DEGRADED', 'OFFLINE'];
+        const next = order[(order.indexOf(getStatus(id)) + 1) % order.length];
+        const updated = { ...statuses, [id]: next };
+        setStatuses(updated);
+        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+      };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
-      const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
+      const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/60' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/60' : 'border-red-500/30 bg-red-500/5 hover:border-red-500/60';
       const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
       return (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Icon name="Activity" className="w-4 h-4 text-noaa-sky" />
             <h3 className="font-bold text-white">Site Status Overview</h3>
-            <p className="text-xs text-slate-500 ml-1">Click any site to view detailed health metrics</p>
+            <p className="text-xs text-slate-500 ml-1">Click a site card to cycle status</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {SITES.map(site => {
               const s = getStatus(site.id);
               return (
-                <div key={site.id} className={`rounded-xl border p-3 text-center ${statusBg(s)}`}>
+                <button key={site.id} onClick={() => cycleStatus(site.id)}
+                  className={`rounded-xl border p-3 text-center transition-all cursor-pointer ${statusBg(s)}`}>
                   <Icon name={faceIcon(s)} className={`w-8 h-8 mx-auto mb-1 ${statusColor(s)}`} />
                   <p className="font-bold text-white text-sm">{site.name}</p>
                   <p className="text-slate-500 text-xs">{site.call}</p>
                   <p className={`text-xs font-bold mt-1 ${statusColor(s)}`}>{s}</p>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -2499,9 +2512,8 @@
               
               <div className="relative max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/95 rounded-2xl flex items-center justify-center shadow-2xl shadow-noaa-blue/40 border-2 border-noaa-cyan/40">
-                    <Icon name="Radio" className="w-8 h-8 text-noaa-blue" />
-                  </div>
+                  <img src="https://www.weather.gov/images/nwr/NWR_logo.png" alt="NOAA Weather Radio"
+                    className="w-16 h-16 rounded-2xl shadow-2xl shadow-noaa-blue/40 object-contain bg-white/95 p-1" />
                   <div>
                     <h1 className="font-black text-white text-3xl tracking-tight drop-shadow-lg" style={{textShadow: '0 2px 12px rgba(0,0,0,0.6)'}}>
                       NWRManager
