@@ -8,6 +8,9 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -41,6 +44,20 @@
   
   <script type="text/babel">
     const { useState, useEffect, useRef, Fragment } = React;
+
+    // Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBRksEHIm6yT0M21HyOnizi4YRqPoRAuoo",
+      authDomain: "nwr-maintenance-v2.firebaseapp.com",
+      projectId: "nwr-maintenance-v2",
+      storageBucket: "nwr-maintenance-v2.firebasestorage.app",
+      messagingSenderId: "855106065084",
+      appId: "1:855106065084:web:0b9123a5d6dbff0756f6b9"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const appId = 'nwr-maintenance-v2';
 
 
     // Icons
@@ -591,7 +608,7 @@
       );
     };
 
-    const InspectionForm = () => {
+    const InspectionForm = ({ user }) => {
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
@@ -617,12 +634,11 @@
       const save = async () => {
         setSaving(true);
         try {
-          const inspections = JSON.parse(localStorage.getItem('nwr-inspections') || '[]');
-          inspections.push({
-            ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-            timestamp: new Date().toISOString()
-          });
-          localStorage.setItem('nwr-inspections', JSON.stringify(inspections));
+          await db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('inspections').add({
+              ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
+              timestamp: new Date().toISOString(), techId: user?.uid
+            });
           alert('✓ Saved!');
           setStep(1); setData({}); setTxType(null);
         } catch (e) { alert('Error: ' + e.message); }
@@ -1469,12 +1485,17 @@
       const [currentDate, setCurrentDate] = useState(new Date());
       const [events, setEvents] = useState(() => {
         const saved = localStorage.getItem('nwr_calendar_events');
-        return saved ? JSON.parse(saved) : [
-          { id: 1, date: '2025-11-29', siteId: 'AUS', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 2, date: '2025-11-30', siteId: 'SAT', type: 'routine', completed: false, notes: 'Annual inspection' },
-          { id: 3, date: '2025-12-02', siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
-          { id: 4, date: '2025-12-05', siteId: 'GNZ', type: 'routine', completed: false, notes: 'Quarterly inspection' },
-          { id: 5, date: '2025-11-25', siteId: 'DRT', type: 'routine', completed: true, notes: 'Completed inspection' },
+        if (saved) return JSON.parse(saved);
+        const d = (offset) => {
+          const dt = new Date(); dt.setDate(dt.getDate() + offset);
+          return dt.toISOString().split('T')[0];
+        };
+        return [
+          { id: 1, date: d(3),  siteId: 'AUS', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
+          { id: 2, date: d(7),  siteId: 'SAT', type: 'routine',    completed: false, notes: 'Annual inspection' },
+          { id: 3, date: d(10), siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
+          { id: 4, date: d(14), siteId: 'GNZ', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
+          { id: 5, date: d(-3), siteId: 'DRT', type: 'routine',    completed: true,  notes: 'Completed inspection' },
         ];
       });
       const [showModal, setShowModal] = useState(false);
@@ -1727,6 +1748,11 @@
         return saved ? JSON.parse(saved) : {};
       });
       const getStatus = (id) => statuses[id] || 'ONLINE';
+      const updateStatus = (id, value) => {
+        const updated = { ...statuses, [id]: value };
+        setStatuses(updated);
+        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+      };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
       const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
       const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
@@ -1735,7 +1761,6 @@
           <div className="flex items-center gap-2 mb-4">
             <Icon name="Activity" className="w-4 h-4 text-noaa-sky" />
             <h3 className="font-bold text-white">Site Status Overview</h3>
-            <p className="text-xs text-slate-500 ml-1">Click any site to view detailed health metrics</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {SITES.map(site => {
@@ -1745,7 +1770,12 @@
                   <Icon name={faceIcon(s)} className={`w-8 h-8 mx-auto mb-1 ${statusColor(s)}`} />
                   <p className="font-bold text-white text-sm">{site.name}</p>
                   <p className="text-slate-500 text-xs">{site.call}</p>
-                  <p className={`text-xs font-bold mt-1 ${statusColor(s)}`}>{s}</p>
+                  <select value={s} onChange={e => updateStatus(site.id, e.target.value)}
+                    className="mt-1 w-full text-xs font-bold rounded px-1 py-0.5 bg-slate-900 border border-slate-600 text-white cursor-pointer">
+                    <option value="ONLINE">ONLINE</option>
+                    <option value="DEGRADED">DEGRADED</option>
+                    <option value="OFFLINE">OFFLINE</option>
+                  </select>
                 </div>
               );
             })}
@@ -1832,16 +1862,17 @@
       const [selectedMetric, setSelectedMetric] = useState('frequency');
 
       useEffect(() => {
-        const fetchInspections = () => {
+        const fetchInspections = async () => {
           try {
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
-            const all = JSON.parse(localStorage.getItem('nwr-inspections') || '[]');
-            let filtered = all.filter(d => new Date(d.timestamp) >= cutoff);
-            if (selectedSite !== 'all') {
-              filtered = filtered.filter(d => d.siteId === selectedSite);
-            }
-            setInspections(filtered);
+            let query = db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').orderBy('timestamp', 'desc');
+            if (selectedSite !== 'all') query = query.where('siteId', '==', selectedSite);
+            const snapshot = await query.get();
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+              .filter(d => new Date(d.timestamp) >= cutoff);
+            setInspections(data);
           } catch (e) {
             console.error('Error fetching:', e);
           }
@@ -1849,6 +1880,9 @@
         };
 
         fetchInspections();
+        const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections').onSnapshot(() => fetchInspections());
+        return () => unsubscribe();
       }, [timeRange, selectedSite]);
 
       // Load and filter maintenance log entries
@@ -2469,7 +2503,21 @@
 
     // App
     function App() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
       const [tab, setTab] = useState('dashboard');
+
+      useEffect(() => {
+        const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+        auth.signInAnonymously().catch(() => setLoading(false));
+        return unsub;
+      }, []);
+
+      if (loading) return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+          <Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" />
+        </div>
+      );
 
       const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -2499,9 +2547,8 @@
               
               <div className="relative max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/95 rounded-2xl flex items-center justify-center shadow-2xl shadow-noaa-blue/40 border-2 border-noaa-cyan/40">
-                    <Icon name="Radio" className="w-8 h-8 text-noaa-blue" />
-                  </div>
+                  <img src="NWR.png" alt="NOAA Weather Radio"
+                    className="w-16 h-16 rounded-2xl shadow-2xl shadow-noaa-blue/40 object-contain" />
                   <div>
                     <h1 className="font-black text-white text-3xl tracking-tight drop-shadow-lg" style={{textShadow: '0 2px 12px rgba(0,0,0,0.6)'}}>
                       NWRManager
@@ -2530,7 +2577,7 @@
           </header>
           <main className="max-w-7xl mx-auto px-4 py-6">
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
-            {tab === 'forms' && <InspectionForm />}
+            {tab === 'forms' && <InspectionForm user={user} />}
             {tab === 'history' && <HistoryTab />}
             {tab === 'schedule' && <ScheduleTab />}
             {tab === 'resources' && <ResourcesTab />}
