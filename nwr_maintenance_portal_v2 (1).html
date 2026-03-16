@@ -1720,6 +1720,40 @@
     };
 
     // Dashboard
+    // Site Status Overview
+    const SiteStatusOverview = () => {
+      const [statuses, setStatuses] = useState(() => {
+        const saved = localStorage.getItem('nwr-site-status');
+        return saved ? JSON.parse(saved) : {};
+      });
+      const getStatus = (id) => statuses[id] || 'ONLINE';
+      const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
+      const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
+      const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
+      return (
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Icon name="Activity" className="w-4 h-4 text-noaa-sky" />
+            <h3 className="font-bold text-white">Site Status Overview</h3>
+            <p className="text-xs text-slate-500 ml-1">Click any site to view detailed health metrics</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {SITES.map(site => {
+              const s = getStatus(site.id);
+              return (
+                <div key={site.id} className={`rounded-xl border p-3 text-center ${statusBg(s)}`}>
+                  <Icon name={faceIcon(s)} className={`w-8 h-8 mx-auto mb-1 ${statusColor(s)}`} />
+                  <p className="font-bold text-white text-sm">{site.name}</p>
+                  <p className="text-slate-500 text-xs">{site.call}</p>
+                  <p className={`text-xs font-bold mt-1 ${statusColor(s)}`}>{s}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
     const Dashboard = ({ setTab }) => {
       const [events] = useState(() => {
         const saved = localStorage.getItem('nwr_calendar_events');
@@ -1752,6 +1786,8 @@
               </div>
             ))}
           </div>
+
+          <SiteStatusOverview />
 
           <div className="grid lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3 space-y-6">
@@ -2163,6 +2199,117 @@
       );
     };
 
+    // History Tab - full-width maintenance log view
+    const HistoryTab = () => (
+      <div className="space-y-4 animate-in">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="History" className="w-5 h-5 text-noaa-sky" />
+          <h2 className="text-xl font-bold text-white">Maintenance History</h2>
+        </div>
+        <MaintenanceLog />
+      </div>
+    );
+
+    // Schedule Tab - full-width calendar view
+    const ScheduleTab = () => (
+      <div className="space-y-4 animate-in">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon name="CalendarDays" className="w-5 h-5 text-noaa-sky" />
+          <h2 className="text-xl font-bold text-white">Maintenance Schedule</h2>
+        </div>
+        <MaintenanceCalendar />
+      </div>
+    );
+
+    // Resources Tab
+    const ResourcesTab = () => {
+      const resources = [
+        { category: 'NOAA Documentation', items: [
+          { label: 'NWR Program Office', url: 'https://www.weather.gov/nwr/', desc: 'Official NWR program information' },
+          { label: 'EHB-7 Technical Manual', url: 'https://www.weather.gov/media/nwr/EHB7.pdf', desc: 'NWR technical operations manual' },
+          { label: 'NWRUP Ticket System', url: 'https://nwrup.weather.gov/', desc: 'Create and track trouble tickets' },
+        ]},
+        { category: 'Transmitter Manuals', items: [
+          { label: 'Armstrong Classic Manual', url: 'https://www.armstrongtransmitters.com/', desc: 'Armstrong transmitter documentation' },
+          { label: 'Nautel Transmitter Support', url: 'https://www.nautel.com/support/', desc: 'Nautel technical support & manuals' },
+          { label: 'Crown Broadcast Support', url: 'https://www.crownbroadcast.com/', desc: 'Crown transmitter documentation' },
+        ]},
+        { category: 'EWX References', items: [
+          { label: 'WFO San Antonio (EWX)', url: 'https://www.weather.gov/ewx/', desc: 'Local WFO homepage' },
+          { label: 'NOAA Weather Radio', url: 'https://www.weather.gov/nwr/station_listing', desc: 'NWR station listings' },
+        ]},
+      ];
+      return (
+        <div className="space-y-6 animate-in">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="BookOpen" className="w-5 h-5 text-noaa-sky" />
+            <h2 className="text-xl font-bold text-white">Resources</h2>
+          </div>
+          {resources.map(group => (
+            <div key={group.category} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+              <h3 className="font-bold text-white mb-4 text-sm uppercase tracking-wider text-noaa-sky">{group.category}</h3>
+              <div className="space-y-3">
+                {group.items.map(item => (
+                  <a key={item.label} href={item.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg hover:border-noaa-sky/50 transition-all group">
+                    <div>
+                      <p className="font-medium text-white group-hover:text-noaa-sky transition-colors">{item.label}</p>
+                      <p className="text-xs text-slate-500">{item.desc}</p>
+                    </div>
+                    <Icon name="ExternalLink" className="w-4 h-4 text-slate-500 group-hover:text-noaa-sky transition-colors" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    // Admin Tab
+    const AdminTab = () => {
+      const [statuses, setStatuses] = useState(() => {
+        const saved = localStorage.getItem('nwr-site-status');
+        return saved ? JSON.parse(saved) : {};
+      });
+      const getStatus = (id) => statuses[id] || 'ONLINE';
+      const cycleStatus = (id) => {
+        const order = ['ONLINE', 'DEGRADED', 'OFFLINE'];
+        const current = getStatus(id);
+        const next = order[(order.indexOf(current) + 1) % order.length];
+        const updated = { ...statuses, [id]: next };
+        setStatuses(updated);
+        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+      };
+      const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : s === 'DEGRADED' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10';
+      return (
+        <div className="space-y-6 animate-in">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="Settings" className="w-5 h-5 text-noaa-sky" />
+            <h2 className="text-xl font-bold text-white">Admin</h2>
+          </div>
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+            <h3 className="font-bold text-white mb-1">Site Status Management</h3>
+            <p className="text-xs text-slate-500 mb-4">Click a status badge to cycle: ONLINE → DEGRADED → OFFLINE</p>
+            <div className="space-y-2">
+              {SITES.map(site => (
+                <div key={site.id} className="flex items-center justify-between p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
+                  <div>
+                    <span className="font-medium text-white">{site.name}</span>
+                    <span className="text-slate-500 text-xs ml-2">{site.call} · {site.freq}</span>
+                  </div>
+                  <button onClick={() => cycleStatus(site.id)}
+                    className={`text-xs font-bold px-3 py-1 rounded-full border ${statusColor(getStatus(site.id))}`}>
+                    {getStatus(site.id)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     // Sites
     const SitesList = () => {
       const [q, setQ] = useState('');
@@ -2327,8 +2474,10 @@
       const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
         { id: 'forms', label: 'Inspection', icon: 'ClipboardList' },
-        { id: 'analytics', label: 'Analytics', icon: 'TrendingUp' },
-        { id: 'sites', label: 'Sites', icon: 'Radio' }
+        { id: 'history', label: 'History', icon: 'History' },
+        { id: 'schedule', label: 'Schedule', icon: 'CalendarDays' },
+        { id: 'resources', label: 'Resources', icon: 'BookOpen' },
+        { id: 'sites', label: 'Sites', icon: 'Radio' },
       ];
 
       return (
@@ -2363,18 +2512,28 @@
                   </div>
                 </div>
                 
-                <nav className="hidden md:flex gap-2 bg-slate-900/90 backdrop-blur-xl rounded-xl p-1.5 border border-slate-700/60 shadow-2xl">
-                  {navItems.map(n => (
-                    <button key={n.id} onClick={() => setTab(n.id)}
-                      className={`px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
-                        tab === n.id 
-                          ? 'bg-noaa-blue text-white shadow-lg shadow-noaa-blue/40' 
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
-                      }`}>
-                      <Icon name={n.icon} className="w-4 h-4" /> {n.label}
-                    </button>
-                  ))}
-                </nav>
+                <div className="hidden md:flex items-center gap-2">
+                  <nav className="flex gap-2 bg-slate-900/90 backdrop-blur-xl rounded-xl p-1.5 border border-slate-700/60 shadow-2xl">
+                    {navItems.map(n => (
+                      <button key={n.id} onClick={() => setTab(n.id)}
+                        className={`px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
+                          tab === n.id
+                            ? 'bg-noaa-blue text-white shadow-lg shadow-noaa-blue/40'
+                            : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                        }`}>
+                        <Icon name={n.icon} className="w-4 h-4" /> {n.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <button onClick={() => setTab('admin')}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all ${
+                      tab === 'admin'
+                        ? 'bg-purple-600 text-white border-purple-500 shadow-lg'
+                        : 'bg-slate-900/90 text-purple-400 border-slate-700/60 hover:border-purple-500/50 hover:text-purple-300'
+                    }`}>
+                    <Icon name="UserCog" className="w-4 h-4" /> ADMIN
+                  </button>
+                </div>
                 
               </div>
             </div>
@@ -2382,12 +2541,16 @@
           <main className="max-w-7xl mx-auto px-4 py-6">
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
             {tab === 'forms' && <InspectionForm />}
+            {tab === 'history' && <HistoryTab />}
+            {tab === 'schedule' && <ScheduleTab />}
+            {tab === 'resources' && <ResourcesTab />}
             {tab === 'analytics' && <Analytics />}
             {tab === 'sites' && <SitesList />}
+            {tab === 'admin' && <AdminTab />}
           </main>
           <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-noaa-blue/95 border-t border-slate-800 px-2 py-2 z-50">
             <div className="flex justify-around">
-              {navItems.map(n => (
+              {[...navItems, { id: 'admin', label: 'Admin', icon: 'UserCog' }].map(n => (
                 <button key={n.id} onClick={() => setTab(n.id)} className={`flex flex-col items-center gap-1 px-3 py-2 ${tab === n.id ? 'text-white' : 'text-white/50'}`}>
                   <Icon name={n.icon} className="w-5 h-5" />
                   <span className="text-[10px]">{n.label}</span>
