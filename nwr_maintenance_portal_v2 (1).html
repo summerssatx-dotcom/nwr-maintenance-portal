@@ -285,6 +285,7 @@
       const saveParts = (updated) => {
         setParts(updated);
         localStorage.setItem('nwr-parts-tracker', JSON.stringify(updated));
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       };
 
       const addPart = () => {
@@ -488,6 +489,7 @@
       const saveEntries = (updated) => {
         setEntries(updated);
         localStorage.setItem('nwr-maintenance-log', JSON.stringify(updated));
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       };
 
       const addEntry = () => {
@@ -1546,6 +1548,7 @@
 
       useEffect(() => {
         localStorage.setItem('nwr_calendar_events_v3', JSON.stringify(events));
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       }, [events]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -1794,6 +1797,7 @@
         const updated = { ...statuses, [id]: value };
         setStatuses(updated);
         localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       };
       useEffect(() => {
         const onStorage = (e) => {
@@ -1846,12 +1850,17 @@
       const pastDue = events.filter(e => !e.completed && e.date < today).length;
       const completed = events.filter(e => e.completed).length;
 
-      const [now, setNow] = React.useState(new Date());
+      const [lastUpdatedRaw, setLastUpdatedRaw] = React.useState(() => localStorage.getItem('nwr-last-updated'));
       React.useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 1000);
-        return () => clearInterval(timer);
+        const onStorage = (e) => { if (e.key === 'nwr-last-updated') setLastUpdatedRaw(e.newValue); };
+        const onCustom = (e) => setLastUpdatedRaw(e.detail);
+        window.addEventListener('storage', onStorage);
+        window.addEventListener('nwr-last-updated', onCustom);
+        return () => { window.removeEventListener('storage', onStorage); window.removeEventListener('nwr-last-updated', onCustom); };
       }, []);
-      const lastUpdated = now.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+      const lastUpdated = lastUpdatedRaw
+        ? new Date(lastUpdatedRaw).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+        : 'No changes recorded yet';
 
       return (
         <div className="space-y-6 animate-in">
@@ -2329,6 +2338,7 @@
         const updated = { ...statuses, [id]: next };
         setStatuses(updated);
         localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : s === 'DEGRADED' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10';
       return (
