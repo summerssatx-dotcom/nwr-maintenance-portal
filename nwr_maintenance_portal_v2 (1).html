@@ -37,6 +37,8 @@
     .dark-popup .leaflet-popup-content { margin: 12px; }
     .leaflet-container { background: #1e293b; }
     .map-tiles-dark { filter: brightness(0.7) contrast(1.1) saturate(0.9); }
+    input[type="date"] { color-scheme: dark; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -829,7 +831,10 @@
           </div>
           <Radio label="Surge Protector OK?" field="surgeOk" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
           <div className="grid grid-cols-2 gap-4">
-            <Input label="ROAMS Battery Date" field="roamsDate" data={data} set={set} />
+            <div>
+              <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">ROAMS Battery Date</label>
+              <DatePicker value={data.roamsDate || ''} onChange={(d) => set('roamsDate', d)} />
+            </div>
             <Radio label="ROAMS Battery Replaced?" field="roamsReplaced" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
           </div>
         </div>
