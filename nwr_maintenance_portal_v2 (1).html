@@ -1339,7 +1339,7 @@
               <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; background: #1e293b; color: #e2e8f0; padding: 8px; border-radius: 8px;">
                 <div style="font-weight: bold; font-size: 15px; margin-bottom: 4px; color: white;">${site.name}</div>
                 <div style="color: #38bdf8; font-family: monospace; font-size: 12px; margin-bottom: 8px;">${site.call}</div>
-                
+
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
                   <strong style="color: #cbd5e1;">Freq:</strong> ${site.freq}
                 </div>
@@ -1394,6 +1394,9 @@
                 ` : ''}
               </div>
             `, { className: 'dark-popup' });
+
+            marker.on('mouseover', function() { this.openPopup(); });
+            marker.on('mouseout', function() { this.closePopup(); });
           });
 
           mapInstanceRef.current = map;
