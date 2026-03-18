@@ -1338,64 +1338,56 @@
             }).addTo(map);
 
             marker.bindTooltip(`
-              <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; background: #1e293b; color: #e2e8f0; padding: 8px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-                <div style="font-weight: bold; font-size: 15px; margin-bottom: 4px; color: white;">${site.name}</div>
-                <div style="color: #38bdf8; font-family: monospace; font-size: 12px; margin-bottom: 8px;">${site.call}</div>
+              <div style="width: 210px; font-family: system-ui, sans-serif; background: #1e293b; color: #e2e8f0; padding: 6px 8px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                <div style="font-weight: bold; font-size: 13px; margin-bottom: 1px; color: white;">${site.name}</div>
+                <div style="color: #38bdf8; font-family: monospace; font-size: 11px; margin-bottom: 5px;">${site.call}</div>
 
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
+                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 1px;">
                   <strong style="color: #cbd5e1;">Freq:</strong> ${site.freq}
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
-                  <strong style="color: #cbd5e1;">Transmitter:</strong> ${site.tx}
+                <div style="font-size: 10px; color: #94a3b8; margin-bottom: ${site.address || site.gateCode || site.lockboxCode || site.securityCode || site.notes ? '5px' : '0'};">
+                  <strong style="color: #cbd5e1;">TX:</strong> ${site.tx}
                 </div>
 
                 ${site.address ? `
-                <div style="border-top: 1px solid #334155; padding-top: 8px; margin-bottom: 8px;">
-                  <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">
-                    <strong style="color: #cbd5e1;">Address:</strong><br/>
-                    <span style="color: #e2e8f0;">${site.address}</span>
+                <div style="border-top: 1px solid #334155; padding-top: 5px; margin-bottom: 5px;">
+                  <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">
+                    <strong style="color: #cbd5e1;">Address:</strong>
+                    <span style="color: #e2e8f0;"> ${site.address}</span>
                   </div>
-                  ${site.building ? `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">Building:</strong> ${site.building}
-                  </div>` : ''}
-                  ${site.poc ? `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">POC:</strong> ${site.poc}${site.phone ? ' ' + site.phone : ''}
-                  </div>` : ''}
+                  ${site.building ? `<div style="font-size: 10px; color: #94a3b8; margin-bottom: 1px;"><strong style="color: #cbd5e1;">Building:</strong> ${site.building}</div>` : ''}
+                  ${site.poc ? `<div style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">POC:</strong> ${site.poc}${site.phone ? ' ' + site.phone : ''}</div>` : ''}
                 </div>
                 ` : ''}
 
                 ${site.gateCode || site.lockboxCode || site.securityCode ? `
-                <div style="border-top: 1px solid #334155; padding-top: 8px; margin-bottom: 8px; background: #0f172a; padding: 6px; border-radius: 4px;">
-                  <div style="font-size: 10px; font-weight: 600; color: #38bdf8; margin-bottom: 4px; text-transform: uppercase;">Access Codes</div>
-                  ${site.gateCode ? `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">Gate:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.gateCode}</span>
-                  </div>` : ''}
-                  ${site.lockboxCode ? `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">Lockbox:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.lockboxCode}</span>
-                  </div>` : ''}
-                  ${site.securityCode ? `<div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">Security:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.securityCode}</span>
-                  </div>` : ''}
+                <div style="border-top: 1px solid #334155; padding-top: 4px; margin-bottom: 5px; background: #0f172a; padding: 4px 5px; border-radius: 4px;">
+                  <div style="font-size: 9px; font-weight: 600; color: #38bdf8; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em;">Access Codes</div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${site.gateCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Gate:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.gateCode}</span></span>` : ''}
+                    ${site.lockboxCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Lockbox:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.lockboxCode}</span></span>` : ''}
+                    ${site.securityCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Security:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.securityCode}</span></span>` : ''}
+                  </div>
                 </div>
                 ` : ''}
 
                 ${site.notes ? `
-                <div style="border-top: 1px solid #334155; padding-top: 6px; margin-bottom: 8px;">
-                  <div style="font-size: 10px; color: #f59e0b; background: #451a03; padding: 4px 6px; border-radius: 4px; border-left: 3px solid #f59e0b;">
+                <div style="border-top: 1px solid #334155; padding-top: 4px; margin-bottom: 5px;">
+                  <div style="font-size: 9px; color: #f59e0b; background: #451a03; padding: 3px 5px; border-radius: 4px; border-left: 3px solid #f59e0b;">
                     ⚠️ ${site.notes}
                   </div>
                 </div>
                 ` : ''}
 
                 ${site.mapsLink ? `
-                <div style="margin-top: 8px;">
-                  <a href="${site.mapsLink}" target="_blank" style="display: inline-block; background: #0ea5e9; color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; text-decoration: none; font-weight: 600;">
+                <div style="margin-top: 5px;">
+                  <a href="${site.mapsLink}" target="_blank" style="display: inline-block; background: #0ea5e9; color: white; padding: 3px 7px; border-radius: 5px; font-size: 10px; text-decoration: none; font-weight: 600;">
                     📍 Open in Maps
                   </a>
                 </div>
                 ` : ''}
               </div>
-            `, { className: 'dark-map-tooltip', direction: 'top', offset: [0, -14], opacity: 1 });
+            `, { className: 'dark-map-tooltip', direction: 'top', offset: [0, -14], opacity: 1, sticky: true });
           });
 
           mapInstanceRef.current = map;
@@ -1422,7 +1414,7 @@
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-purple-500" /><span className="text-slate-400">Nautel</span></div>
             </div>
           </div>
-          <div ref={mapRef} style={{ height: '300px', width: '100%', position: 'relative', zIndex: 1 }} />
+          <div ref={mapRef} style={{ height: '440px', width: '100%', position: 'relative', zIndex: 1 }} />
         </div>
       );
     };
