@@ -1301,12 +1301,13 @@
     const SiteMap = () => {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
+      const [tooltip, setTooltip] = useState(null); // { site, x, y }
 
       useEffect(() => {
         if (mapRef.current && !mapInstanceRef.current) {
           // Center on Texas
           const map = L.map(mapRef.current).setView([29.5, -98.5], 7);
-          
+
           // Add tile layer (CartoDB Voyager - medium tones, darkened via CSS)
           L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
             attribution: '© OpenStreetMap contributors, © CARTO',
@@ -1330,64 +1331,17 @@
 
           // Add markers for each site
           SITES.forEach(site => {
-            const color = site.tx.includes('Crown') ? '#14b8a6' : 
+            const color = site.tx.includes('Crown') ? '#14b8a6' :
                          site.tx.includes('Armstrong') ? '#3b82f6' : '#a855f7';
-            
+
             const marker = L.marker([parseFloat(site.lat), parseFloat(site.lng)], {
               icon: createMarkerIcon(color)
             }).addTo(map);
 
-            marker.bindTooltip(`
-              <div style="width: 210px; font-family: system-ui, sans-serif; background: #1e293b; color: #e2e8f0; padding: 6px 8px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-                <div style="font-weight: bold; font-size: 13px; margin-bottom: 1px; color: white;">${site.name}</div>
-                <div style="color: #38bdf8; font-family: monospace; font-size: 11px; margin-bottom: 5px;">${site.call}</div>
-
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 1px;">
-                  <strong style="color: #cbd5e1;">Freq:</strong> ${site.freq}
-                </div>
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: ${site.address || site.gateCode || site.lockboxCode || site.securityCode || site.notes ? '5px' : '0'};">
-                  <strong style="color: #cbd5e1;">TX:</strong> ${site.tx}
-                </div>
-
-                ${site.address ? `
-                <div style="border-top: 1px solid #334155; padding-top: 5px; margin-bottom: 5px;">
-                  <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">
-                    <strong style="color: #cbd5e1;">Address:</strong>
-                    <span style="color: #e2e8f0;"> ${site.address}</span>
-                  </div>
-                  ${site.building ? `<div style="font-size: 10px; color: #94a3b8; margin-bottom: 1px;"><strong style="color: #cbd5e1;">Building:</strong> ${site.building}</div>` : ''}
-                  ${site.poc ? `<div style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">POC:</strong> ${site.poc}${site.phone ? ' ' + site.phone : ''}</div>` : ''}
-                </div>
-                ` : ''}
-
-                ${site.gateCode || site.lockboxCode || site.securityCode ? `
-                <div style="border-top: 1px solid #334155; padding-top: 4px; margin-bottom: 5px; background: #0f172a; padding: 4px 5px; border-radius: 4px;">
-                  <div style="font-size: 9px; font-weight: 600; color: #38bdf8; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em;">Access Codes</div>
-                  <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${site.gateCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Gate:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.gateCode}</span></span>` : ''}
-                    ${site.lockboxCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Lockbox:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.lockboxCode}</span></span>` : ''}
-                    ${site.securityCode ? `<span style="font-size: 10px; color: #94a3b8;"><strong style="color: #cbd5e1;">Security:</strong> <span style="font-family: monospace; color: #fbbf24;">${site.securityCode}</span></span>` : ''}
-                  </div>
-                </div>
-                ` : ''}
-
-                ${site.notes ? `
-                <div style="border-top: 1px solid #334155; padding-top: 4px; margin-bottom: 5px;">
-                  <div style="font-size: 9px; color: #f59e0b; background: #451a03; padding: 3px 5px; border-radius: 4px; border-left: 3px solid #f59e0b; word-wrap: break-word; overflow-wrap: break-word; white-space: normal;">
-                    ⚠️ ${site.notes}
-                  </div>
-                </div>
-                ` : ''}
-
-                ${site.mapsLink ? `
-                <div style="margin-top: 5px;">
-                  <a href="${site.mapsLink}" target="_blank" style="display: inline-block; background: #0ea5e9; color: white; padding: 3px 7px; border-radius: 5px; font-size: 10px; text-decoration: none; font-weight: 600;">
-                    📍 Open in Maps
-                  </a>
-                </div>
-                ` : ''}
-              </div>
-            `, { className: 'dark-map-tooltip', direction: 'top', offset: [0, -14], opacity: 1, sticky: true });
+            marker.on('mousemove', (e) => {
+              setTooltip({ site, x: e.originalEvent.clientX, y: e.originalEvent.clientY });
+            });
+            marker.on('mouseout', () => setTooltip(null));
           });
 
           mapInstanceRef.current = map;
@@ -1400,6 +1354,29 @@
           }
         };
       }, []);
+
+      // Position card to the right of cursor, flip left if near right edge
+      const cardW = 220;
+      const cardOffset = 16;
+      const tooltipStyle = tooltip ? {
+        position: 'fixed',
+        left: (tooltip.x + cardOffset + cardW > window.innerWidth ? tooltip.x - cardW - cardOffset : tooltip.x + cardOffset),
+        top: Math.max(8, tooltip.y - 20),
+        zIndex: 99999,
+        pointerEvents: 'none',
+        width: cardW + 'px',
+        fontFamily: 'system-ui, sans-serif',
+        background: '#1e293b',
+        color: '#e2e8f0',
+        padding: '8px 10px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+        border: '1px solid #334155',
+        fontSize: '11px',
+        lineHeight: '1.4',
+      } : null;
+
+      const s = tooltip ? tooltip.site : null;
 
       return (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden relative z-10">
@@ -1415,6 +1392,37 @@
             </div>
           </div>
           <div ref={mapRef} style={{ height: '440px', width: '100%', position: 'relative', zIndex: 1 }} />
+          {tooltip && s && ReactDOM.createPortal(
+            <div style={tooltipStyle}>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '2px', color: 'white' }}>{s.name}</div>
+              <div style={{ color: '#38bdf8', fontFamily: 'monospace', fontSize: '11px', marginBottom: '6px' }}>{s.call}</div>
+              <div style={{ color: '#94a3b8', marginBottom: '1px' }}><strong style={{ color: '#cbd5e1' }}>Freq:</strong> {s.freq}</div>
+              <div style={{ color: '#94a3b8', marginBottom: s.address || s.gateCode || s.lockboxCode || s.securityCode || s.notes ? '6px' : '0' }}><strong style={{ color: '#cbd5e1' }}>TX:</strong> {s.tx}</div>
+              {s.address && (
+                <div style={{ borderTop: '1px solid #334155', paddingTop: '5px', marginBottom: '5px' }}>
+                  <div style={{ color: '#94a3b8', marginBottom: '2px' }}><strong style={{ color: '#cbd5e1' }}>Address:</strong> <span style={{ color: '#e2e8f0' }}>{s.address}</span></div>
+                  {s.building && <div style={{ color: '#94a3b8', marginBottom: '1px' }}><strong style={{ color: '#cbd5e1' }}>Building:</strong> {s.building}</div>}
+                  {s.poc && <div style={{ color: '#94a3b8' }}><strong style={{ color: '#cbd5e1' }}>POC:</strong> {s.poc}{s.phone ? ' ' + s.phone : ''}</div>}
+                </div>
+              )}
+              {(s.gateCode || s.lockboxCode || s.securityCode) && (
+                <div style={{ borderTop: '1px solid #334155', paddingTop: '5px', marginBottom: '5px', background: '#0f172a', padding: '4px 6px', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: '600', color: '#38bdf8', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Access Codes</div>
+                  {s.gateCode && <div style={{ color: '#94a3b8', marginBottom: '1px' }}><strong style={{ color: '#cbd5e1' }}>Gate:</strong> <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{s.gateCode}</span></div>}
+                  {s.lockboxCode && <div style={{ color: '#94a3b8', marginBottom: '1px' }}><strong style={{ color: '#cbd5e1' }}>Lockbox:</strong> <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{s.lockboxCode}</span></div>}
+                  {s.securityCode && <div style={{ color: '#94a3b8' }}><strong style={{ color: '#cbd5e1' }}>Security:</strong> <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{s.securityCode}</span></div>}
+                </div>
+              )}
+              {s.notes && (
+                <div style={{ borderTop: '1px solid #334155', paddingTop: '5px' }}>
+                  <div style={{ fontSize: '10px', color: '#f59e0b', background: '#451a03', padding: '3px 6px', borderRadius: '4px', borderLeft: '3px solid #f59e0b', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                    ⚠️ {s.notes}
+                  </div>
+                </div>
+              )}
+            </div>,
+            document.body
+          )}
         </div>
       );
     };
