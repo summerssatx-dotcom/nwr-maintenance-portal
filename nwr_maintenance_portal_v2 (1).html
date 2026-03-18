@@ -1339,7 +1339,7 @@
               <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; background: #1e293b; color: #e2e8f0; padding: 8px; border-radius: 8px;">
                 <div style="font-weight: bold; font-size: 15px; margin-bottom: 4px; color: white;">${site.name}</div>
                 <div style="color: #38bdf8; font-family: monospace; font-size: 12px; margin-bottom: 8px;">${site.call}</div>
-                
+
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
                   <strong style="color: #cbd5e1;">Freq:</strong> ${site.freq}
                 </div>
@@ -1394,6 +1394,9 @@
                 ` : ''}
               </div>
             `, { className: 'dark-popup' });
+
+            marker.on('mouseover', function() { this.openPopup(); });
+            marker.on('mouseout', function() { this.closePopup(); });
           });
 
           mapInstanceRef.current = map;
@@ -2351,8 +2354,26 @@
     const SitesList = () => {
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
+      const [statuses, setStatuses] = useState(() => {
+        const saved = localStorage.getItem('nwr-site-status');
+        return saved ? JSON.parse(saved) : {};
+      });
+      const getStatus = (id) => statuses[id] || 'ONLINE';
+
+      useEffect(() => {
+        const onStorage = (e) => {
+          if (e.key === 'nwr-site-status') {
+            setStatuses(e.newValue ? JSON.parse(e.newValue) : {});
+          }
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+      }, []);
+
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
       const color = (t) => t.includes('Crown') ? 'teal' : t.includes('Armstrong') ? 'blue' : 'purple';
+      const allOnline = SITES.every(s => getStatus(s.id) === 'ONLINE');
+      const anyOffline = SITES.some(s => getStatus(s.id) === 'OFFLINE');
       
       const toggleExpand = (id) => {
         setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -2363,12 +2384,14 @@
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
             <div className="flex items-center gap-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2"><Icon name="MapPin" className="w-5 h-5 text-noaa-sky" /> Site Directory</h2>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${allOnline ? 'bg-emerald-500/10 border-emerald-500/30' : anyOffline ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
                 <div className="relative">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                  <div className={`w-2 h-2 rounded-full ${allOnline ? 'bg-emerald-500' : anyOffline ? 'bg-red-500' : 'bg-amber-500'}`} />
+                  <div className={`absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-50 ${allOnline ? 'bg-emerald-500' : anyOffline ? 'bg-red-500' : 'bg-amber-500'}`} />
                 </div>
-                <span className="text-emerald-400 text-xs font-medium">All Sites Operational</span>
+                <span className={`text-xs font-medium ${allOnline ? 'text-emerald-400' : anyOffline ? 'text-red-400' : 'text-amber-400'}`}>
+                  {allOnline ? 'All Sites Operational' : anyOffline ? 'Site Outage Detected' : 'Degraded Performance'}
+                </span>
               </div>
             </div>
             <div className="relative w-full sm:w-72">
@@ -2395,15 +2418,20 @@
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(s => (
+            {filtered.map(s => {
+              const st = getStatus(s.id);
+              const dotCls = st === 'ONLINE' ? 'bg-emerald-500' : st === 'DEGRADED' ? 'bg-amber-500' : 'bg-red-500';
+              const statusCls = st === 'ONLINE' ? 'text-emerald-400' : st === 'DEGRADED' ? 'text-amber-400' : 'text-red-400';
+              const statusLabel = st === 'ONLINE' ? 'Online' : st === 'DEGRADED' ? 'Degraded' : 'Offline';
+              return (
               <div key={s.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600/50 transition-all">
                 <div className="flex justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-white text-lg">{s.name}</h3>
                       <div className="relative">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                        <div className={`w-2 h-2 rounded-full ${dotCls}`} />
+                        <div className={`absolute inset-0 w-2 h-2 rounded-full ${dotCls} animate-ping opacity-50`} />
                       </div>
                     </div>
                     <p className="text-noaa-sky font-mono text-sm">{s.call}</p>
@@ -2423,7 +2451,7 @@
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Status</span>
-                    <span className="text-emerald-400 text-xs font-medium">● Online</span>
+                    <span className={`text-xs font-medium ${statusCls}`}>● {statusLabel}</span>
                   </div>
                 </div>
                 
@@ -2498,7 +2526,7 @@
                   </button>
                 </div>
               </div>
-            ))}
+            ); })}
           </div>
         </div>
       );
