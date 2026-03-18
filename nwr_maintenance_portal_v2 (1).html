@@ -1562,11 +1562,11 @@
         return 'scheduled';
       };
 
-      const statusBorders = {
-        scheduled: 'border-blue-400 bg-blue-500/40 text-white font-medium',
-        duetoday: 'border-amber-400 bg-amber-500/50 text-white font-medium',
-        pastdue: 'border-red-400 bg-red-500/50 text-white font-medium',
-        completed: 'border-emerald-400 bg-emerald-500/40 text-white font-medium'
+      const statusColors = {
+        scheduled: 'bg-blue-600 hover:bg-blue-500',
+        duetoday: 'bg-amber-500 hover:bg-amber-400',
+        pastdue: 'bg-red-600 hover:bg-red-500',
+        completed: 'bg-emerald-700 hover:bg-emerald-600'
       };
 
       const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
@@ -1642,27 +1642,28 @@
             </div>
             <div className="grid grid-cols-7 gap-1.5">
               {days.map((day, idx) => {
-                if (!day) return <div key={idx} className="h-24 bg-slate-900/30 rounded-lg" />;
+                if (!day) return <div key={idx} className="min-h-28 bg-slate-900/30 rounded-lg" />;
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dayEvents = getEventsForDate(day);
                 const isToday = dateStr === today;
                 return (
                   <div key={idx} onClick={() => openAddModal(dateStr)}
-                    className={`h-24 p-2 rounded-lg cursor-pointer transition-all hover:ring-2 hover:ring-noaa-sky/50 ${isToday ? 'bg-noaa-sky/15 ring-2 ring-noaa-sky/40' : 'bg-slate-900/50'}`}>
-                    <div className={`text-sm font-bold mb-1 ${isToday ? 'text-noaa-sky' : 'text-slate-300'}`}>{day}</div>
-                    <div className="space-y-1 overflow-hidden">
-                      {dayEvents.slice(0, 2).map(ev => {
+                    className={`min-h-28 p-2 rounded-lg cursor-pointer transition-all hover:ring-2 hover:ring-noaa-sky/50 ${isToday ? 'bg-noaa-sky/15 ring-2 ring-noaa-sky/40' : 'bg-slate-900/50'}`}>
+                    <div className={`text-sm font-bold mb-1.5 ${isToday ? 'text-noaa-sky' : 'text-slate-300'}`}>{day}</div>
+                    <div className="space-y-1">
+                      {dayEvents.slice(0, 3).map(ev => {
                         const site = SITES.find(s => s.id === ev.siteId);
                         const status = getEventStatus(ev);
                         return (
                           <div key={ev.id} onClick={(e) => { e.stopPropagation(); openEditModal(ev); }}
-                            className={`text-[11px] px-1.5 py-1 rounded border truncate flex items-center gap-1 ${statusBorders[status]}`}>
-                            <Icon name={ev.type === 'routine' ? 'Glasses' : 'Wrench'} className="w-3 h-3 flex-shrink-0" />
-                            <span className="truncate">{site?.id || ev.siteId}</span>
+                            className={`text-[11px] px-1.5 py-1 rounded cursor-pointer flex items-center gap-1 w-full text-white transition-colors ${statusColors[status]}`}>
+                            <Icon name={ev.type === 'routine' ? 'Glasses' : 'Wrench'} className="w-3 h-3 flex-shrink-0 opacity-90" />
+                            <span className="font-semibold flex-shrink-0">{site?.id || ev.siteId}</span>
+                            {ev.notes && <span className="truncate opacity-80 min-w-0">&nbsp;·&nbsp;{ev.notes}</span>}
                           </div>
                         );
                       })}
-                      {dayEvents.length > 2 && <div className="text-xs text-slate-400 pl-1 font-medium">+{dayEvents.length - 2} more</div>}
+                      {dayEvents.length > 3 && <div className="text-[11px] text-slate-400 pl-1 font-medium">+{dayEvents.length - 3} more</div>}
                     </div>
                   </div>
                 );
