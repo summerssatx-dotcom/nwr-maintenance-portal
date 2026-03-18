@@ -37,8 +37,7 @@
     .dark-popup .leaflet-popup-content { margin: 12px; }
     .leaflet-container { background: #1e293b; }
     .map-tiles-dark { filter: brightness(0.7) contrast(1.1) saturate(0.9); }
-    input[type="date"] { color-scheme: dark; }
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+
   </style>
 </head>
 <body>
@@ -810,7 +809,10 @@
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Date" field="date" data={data} set={set} type="date" />
+            <div>
+              <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">Date</label>
+              <DatePicker value={data.date || ''} onChange={(d) => set('date', d)} />
+            </div>
             <Input label="Technician" field="tech" data={data} set={set} />
           </div>
         </div>
