@@ -335,8 +335,7 @@
               </div>
               <input type="text" placeholder="Vendor" value={newPart.vendor} onChange={e => setNewPart({...newPart, vendor: e.target.value})}
                 className="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded p-2 outline-none focus:border-noaa-sky" />
-              <input type="date" value={newPart.orderDate} onChange={e => setNewPart({...newPart, orderDate: e.target.value})}
-                className="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded p-2 outline-none focus:border-noaa-sky" />
+              <DatePicker value={newPart.orderDate || ''} onChange={(d) => setNewPart({...newPart, orderDate: d})} />
               <button onClick={addPart}
                 className="w-full bg-noaa-blue hover:bg-noaa-light text-white text-xs font-bold py-2 rounded transition-colors">
                 Add Part
