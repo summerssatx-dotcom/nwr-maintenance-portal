@@ -1533,18 +1533,11 @@
     const MaintenanceCalendar = () => {
       const [currentDate, setCurrentDate] = useState(new Date());
       const [events, setEvents] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events_v2');
-        if (saved) return JSON.parse(saved);
-        const d = (offset) => {
-          const dt = new Date(); dt.setDate(dt.getDate() + offset);
-          return dt.toISOString().split('T')[0];
-        };
-        return [
-          { id: 1, date: d(3),  siteId: 'AUS', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
-          { id: 2, date: d(7),  siteId: 'SAT', type: 'routine',    completed: false, notes: 'Annual inspection' },
-          { id: 3, date: d(10), siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
-          { id: 4, date: d(14), siteId: 'GNZ', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
-        ];
+        // Clear any legacy keys from older versions
+        localStorage.removeItem('nwr_calendar_events');
+        localStorage.removeItem('nwr_calendar_events_v3');
+        const saved = localStorage.getItem('nwr_calendar_events_v3');
+        return saved ? JSON.parse(saved) : [];
       });
       const [showModal, setShowModal] = useState(false);
       const [editEvent, setEditEvent] = useState(null);
@@ -1552,7 +1545,7 @@
       const [form, setForm] = useState({ date: '', siteId: '', type: 'routine', notes: '' });
 
       useEffect(() => {
-        localStorage.setItem('nwr_calendar_events_v2', JSON.stringify(events));
+        localStorage.setItem('nwr_calendar_events_v3', JSON.stringify(events));
       }, [events]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -1843,7 +1836,7 @@
 
     const Dashboard = ({ setTab }) => {
       const [events] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events_v2');
+        const saved = localStorage.getItem('nwr_calendar_events_v3');
         return saved ? JSON.parse(saved) : [];
       });
 
