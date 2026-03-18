@@ -1544,7 +1544,6 @@
           { id: 2, date: d(7),  siteId: 'SAT', type: 'routine',    completed: false, notes: 'Annual inspection' },
           { id: 3, date: d(10), siteId: 'KER', type: 'nonroutine', completed: false, notes: 'Replace cooling fan' },
           { id: 4, date: d(14), siteId: 'GNZ', type: 'routine',    completed: false, notes: 'Quarterly inspection' },
-          { id: 5, date: d(-3), siteId: 'DRT', type: 'routine',    completed: true,  notes: 'Completed inspection' },
         ];
       });
       const [showModal, setShowModal] = useState(false);
@@ -1858,9 +1857,9 @@
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { t: 'Sites', v: '12', l: 'Operational', c: 'noaa-sky', i: 'Radio' },
-              { t: 'Scheduled', v: String(scheduled || 5), l: 'Upcoming', c: 'blue', i: 'Calendar' },
+              { t: 'Scheduled', v: String(scheduled), l: 'Upcoming', c: 'blue', i: 'Calendar' },
               { t: 'Past Due', v: String(pastDue), l: pastDue > 0 ? 'Action Needed' : 'None', c: pastDue > 0 ? 'red' : 'emerald', i: 'AlertTriangle' },
-              { t: 'Completed', v: String(completed || 1), l: 'This Period', c: 'emerald', i: 'CheckCircle' }
+              { t: 'Completed', v: String(completed), l: 'This Period', c: 'emerald', i: 'CheckCircle' }
             ].map((s, i) => (
               <div key={i} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
                 <div className="flex justify-between">
