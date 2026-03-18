@@ -946,9 +946,30 @@
                   </Fragment>
                 )}
               </div>
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface</p>
+                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="RF Power" field={`${p}_li_rf`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="Ant SWR" field={`${p}_li_swr`} data={data} set={set} type="number" small />
+                </div>
+                {is1KW && (
+                  <Fragment>
+                    <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Power Amplifiers</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input label="Power Out" field={`${p}_li_pwr`} data={data} set={set} type="number" unit="W" small />
+                      <Input label="PA Temp" field={`${p}_li_temp`} data={data} set={set} type="number" unit="°" small />
+                      <Input label="In Ref" field={`${p}_li_inref`} data={data} set={set} type="number" unit="W" small />
+                      <Input label="SWR" field={`${p}_li_1kw_swr`} data={data} set={set} type="number" small />
+                      <Input label="ACC" field={`${p}_li_acc`} data={data} set={set} type="number" small />
+                    </div>
+                  </Fragment>
+                )}
+              </div>
               <Section title="Exciter/PA Currents and Voltages" num="5" />
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter</p>
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel</p>
+                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Input label="PA DC V" field={`${p}_dc_v`} data={data} set={set} type="number" unit="V" small />
                   <Input label="PA DC A" field={`${p}_dc_a`} data={data} set={set} type="number" unit="A" small />
@@ -962,6 +983,26 @@
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-2">
                       {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_pa${i}`} data={data} set={set} type="number" unit="A" small />)}
+                    </div>
+                  </Fragment>
+                )}
+              </div>
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface</p>
+                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="PA DC V" field={`${p}_li_dc_v`} data={data} set={set} type="number" unit="V" small />
+                  <Input label="PA DC A" field={`${p}_li_dc_a`} data={data} set={set} type="number" unit="A" small />
+                </div>
+                {is1KW && (
+                  <Fragment>
+                    <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Amplifiers</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input label="PA Voltage" field={`${p}_li_pa_v`} data={data} set={set} type="number" unit="V" small />
+                      <Input label="Tot Current" field={`${p}_li_tot_a`} data={data} set={set} type="number" unit="A" small />
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_li_pa${i}`} data={data} set={set} type="number" unit="A" small />)}
                     </div>
                   </Fragment>
                 )}
