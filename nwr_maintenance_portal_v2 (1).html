@@ -1533,7 +1533,7 @@
     const MaintenanceCalendar = () => {
       const [currentDate, setCurrentDate] = useState(new Date());
       const [events, setEvents] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events');
+        const saved = localStorage.getItem('nwr_calendar_events_v2');
         if (saved) return JSON.parse(saved);
         const d = (offset) => {
           const dt = new Date(); dt.setDate(dt.getDate() + offset);
@@ -1552,7 +1552,7 @@
       const [form, setForm] = useState({ date: '', siteId: '', type: 'routine', notes: '' });
 
       useEffect(() => {
-        localStorage.setItem('nwr_calendar_events', JSON.stringify(events));
+        localStorage.setItem('nwr_calendar_events_v2', JSON.stringify(events));
       }, [events]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -1843,7 +1843,7 @@
 
     const Dashboard = ({ setTab }) => {
       const [events] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events');
+        const saved = localStorage.getItem('nwr_calendar_events_v2');
         return saved ? JSON.parse(saved) : [];
       });
 
