@@ -1535,9 +1535,8 @@
     const MaintenanceCalendar = () => {
       const [currentDate, setCurrentDate] = useState(new Date());
       const [events, setEvents] = useState(() => {
-        // Clear any legacy keys from older versions
+        // Clear legacy key from older versions
         localStorage.removeItem('nwr_calendar_events');
-        localStorage.removeItem('nwr_calendar_events_v3');
         const saved = localStorage.getItem('nwr_calendar_events_v3');
         return saved ? JSON.parse(saved) : [];
       });
