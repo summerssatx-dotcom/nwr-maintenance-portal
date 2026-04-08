@@ -1604,28 +1604,43 @@
 
       const saveEvent = async () => {
         if (!form.date || !form.siteId) return alert('Please select date and site');
-        if (editEvent) {
-          await eventsRef.doc(editEvent.id).update({ ...form });
-        } else {
-          await eventsRef.add({ ...form, completed: false });
+        try {
+          if (editEvent) {
+            await eventsRef.doc(editEvent.id).update({ ...form });
+          } else {
+            await eventsRef.add({ ...form, completed: false });
+          }
+          bumpLastUpdated();
+          setShowModal(false);
+          setIsEditing(false);
+        } catch (err) {
+          console.error('saveEvent error:', err);
+          alert('Failed to save event: ' + err.message);
         }
-        bumpLastUpdated();
-        setShowModal(false);
-        setIsEditing(false);
       };
 
       const deleteEvent = async (id) => {
         if (confirm('Delete this event?')) {
-          await eventsRef.doc(id).delete();
-          bumpLastUpdated();
-          setShowModal(false);
+          try {
+            await eventsRef.doc(id).delete();
+            bumpLastUpdated();
+            setShowModal(false);
+          } catch (err) {
+            console.error('deleteEvent error:', err);
+            alert('Failed to delete event: ' + err.message);
+          }
         }
       };
 
       const toggleComplete = async (id) => {
         const ev = events.find(e => e.id === id);
-        if (ev) await eventsRef.doc(id).update({ completed: !ev.completed });
-        bumpLastUpdated();
+        if (!ev) return;
+        try {
+          await eventsRef.doc(id).update({ completed: !ev.completed });
+          bumpLastUpdated();
+        } catch (err) {
+          console.error('toggleComplete error:', err);
+        }
       };
 
       const getEventsForDate = (day) => {
