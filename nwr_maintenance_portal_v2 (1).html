@@ -1534,21 +1534,22 @@
     // Maintenance Calendar
     const MaintenanceCalendar = () => {
       const [currentDate, setCurrentDate] = useState(new Date());
-      const [events, setEvents] = useState(() => {
-        // Clear legacy key from older versions
-        localStorage.removeItem('nwr_calendar_events');
-        const saved = localStorage.getItem('nwr_calendar_events_v3');
-        return saved ? JSON.parse(saved) : [];
-      });
+      const [events, setEvents] = useState([]);
+      const [loadingEvents, setLoadingEvents] = useState(true);
       const [showModal, setShowModal] = useState(false);
       const [editEvent, setEditEvent] = useState(null);
       const [isEditing, setIsEditing] = useState(false);
       const [form, setForm] = useState({ date: '', siteId: '', type: 'routine', notes: '' });
 
+      const eventsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events');
+
       useEffect(() => {
-        localStorage.setItem('nwr_calendar_events_v3', JSON.stringify(events));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
-      }, [events]);
+        const unsubscribe = eventsRef.orderBy('date').onSnapshot(snapshot => {
+          setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          setLoadingEvents(false);
+        });
+        return () => unsubscribe();
+      }, []);
 
       const today = new Date().toISOString().split('T')[0];
       const year = currentDate.getFullYear();
@@ -1595,26 +1596,36 @@
         setShowModal(true);
       };
 
-      const saveEvent = () => {
+      const bumpLastUpdated = () => {
+        const ts = new Date().toISOString();
+        localStorage.setItem('nwr-last-updated', ts);
+        window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+      };
+
+      const saveEvent = async () => {
         if (!form.date || !form.siteId) return alert('Please select date and site');
         if (editEvent) {
-          setEvents(events.map(e => e.id === editEvent.id ? { ...e, ...form } : e));
+          await eventsRef.doc(editEvent.id).update({ ...form });
         } else {
-          setEvents([...events, { id: Date.now(), ...form, completed: false }]);
+          await eventsRef.add({ ...form, completed: false });
         }
+        bumpLastUpdated();
         setShowModal(false);
         setIsEditing(false);
       };
 
-      const deleteEvent = (id) => {
+      const deleteEvent = async (id) => {
         if (confirm('Delete this event?')) {
-          setEvents(events.filter(e => e.id !== id));
+          await eventsRef.doc(id).delete();
+          bumpLastUpdated();
           setShowModal(false);
         }
       };
 
-      const toggleComplete = (id) => {
-        setEvents(events.map(e => e.id === id ? { ...e, completed: !e.completed } : e));
+      const toggleComplete = async (id) => {
+        const ev = events.find(e => e.id === id);
+        if (ev) await eventsRef.doc(id).update({ completed: !ev.completed });
+        bumpLastUpdated();
       };
 
       const getEventsForDate = (day) => {
@@ -1632,6 +1643,7 @@
             <div className="flex items-center gap-2">
               <Icon name="Calendar" className="w-5 h-5 text-noaa-sky" />
               <h3 className="font-bold text-white text-lg">Maintenance Calendar</h3>
+              {loadingEvents && <span className="text-xs text-slate-400 animate-pulse">Loading...</span>}
             </div>
             <div className="flex items-center gap-2">
               <button onClick={prevMonth} className="p-2 hover:bg-slate-700 rounded-lg"><Icon name="ChevronLeft" className="w-5 h-5 text-slate-400" /></button>
@@ -1913,10 +1925,14 @@
     };
 
     const Dashboard = ({ setTab }) => {
-      const [events] = useState(() => {
-        const saved = localStorage.getItem('nwr_calendar_events_v3');
-        return saved ? JSON.parse(saved) : [];
-      });
+      const [events, setEvents] = useState([]);
+      useEffect(() => {
+        const ref = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events');
+        const unsubscribe = ref.onSnapshot(snapshot => {
+          setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+        return () => unsubscribe();
+      }, []);
 
       const today = new Date().toISOString().split('T')[0];
       const scheduled = events.filter(e => !e.completed && e.date >= today).length;
