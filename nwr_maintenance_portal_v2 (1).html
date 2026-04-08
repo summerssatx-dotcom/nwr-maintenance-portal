@@ -1610,11 +1610,6 @@
 
       const saveEvent = async () => {
         if (!form.date || !form.siteId) return alert('Please select date and site');
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-          alert('Not signed in yet — please wait a moment and try again, or reload the page.');
-          return;
-        }
         try {
           if (editEvent) {
             await eventsRef.doc(editEvent.id).update({ ...form });
@@ -1626,8 +1621,7 @@
           setIsEditing(false);
         } catch (err) {
           console.error('saveEvent error:', err);
-          console.error('Auth UID:', currentUser?.uid, 'Provider:', currentUser?.providerData);
-          alert('Failed to save event: ' + err.message + '\n\nAuth UID: ' + (currentUser?.uid || 'none') + '\nPath: artifacts/' + appId + '/public/data/calendar_events');
+          alert('Failed to save event: ' + err.message);
         }
       };
 
@@ -2684,42 +2678,17 @@
     function App() {
       const [user, setUser] = useState(null);
       const [loading, setLoading] = useState(true);
-      const [authError, setAuthError] = useState(null);
       const [tab, setTab] = useState('dashboard');
 
       useEffect(() => {
-        const unsub = auth.onAuthStateChanged(async (u) => {
-          if (u) {
-            setUser(u);
-            setLoading(false);
-          } else {
-            try {
-              await auth.signInAnonymously();
-              // onAuthStateChanged will fire again with the user
-            } catch (err) {
-              console.error('Anonymous sign-in failed:', err);
-              setAuthError(err.message);
-              setLoading(false);
-            }
-          }
-        });
+        const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+        auth.signInAnonymously().catch(err => console.warn('Anonymous auth failed:', err.message));
         return unsub;
       }, []);
 
       if (loading) return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center">
           <Icon name="Loader2" className="w-8 h-8 text-noaa-sky animate-spin" />
-        </div>
-      );
-
-      if (authError) return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-8">
-          <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-6 max-w-lg text-center">
-            <Icon name="AlertTriangle" className="w-10 h-10 text-red-400 mx-auto mb-3" />
-            <h2 className="text-white font-bold text-lg mb-2">Firebase Authentication Failed</h2>
-            <p className="text-red-300 text-sm mb-3">{authError}</p>
-            <p className="text-slate-400 text-xs">Check browser console for details. Common fix: enable Anonymous sign-in in Firebase Console → Authentication → Sign-in method.</p>
-          </div>
         </div>
       );
 
