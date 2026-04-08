@@ -1544,10 +1544,16 @@
       const eventsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('calendar_events');
 
       useEffect(() => {
-        const unsubscribe = eventsRef.orderBy('date').onSnapshot(snapshot => {
-          setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          setLoadingEvents(false);
-        });
+        const unsubscribe = eventsRef.orderBy('date').onSnapshot(
+          snapshot => {
+            setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoadingEvents(false);
+          },
+          err => {
+            console.error('Calendar onSnapshot error:', err);
+            setLoadingEvents(false);
+          }
+        );
         return () => unsubscribe();
       }, []);
 
@@ -1604,6 +1610,11 @@
 
       const saveEvent = async () => {
         if (!form.date || !form.siteId) return alert('Please select date and site');
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          alert('Not signed in yet — please wait a moment and try again, or reload the page.');
+          return;
+        }
         try {
           if (editEvent) {
             await eventsRef.doc(editEvent.id).update({ ...form });
@@ -1615,7 +1626,8 @@
           setIsEditing(false);
         } catch (err) {
           console.error('saveEvent error:', err);
-          alert('Failed to save event: ' + err.message);
+          console.error('Auth UID:', currentUser?.uid, 'Provider:', currentUser?.providerData);
+          alert('Failed to save event: ' + err.message + '\n\nAuth UID: ' + (currentUser?.uid || 'none') + '\nPath: artifacts/' + appId + '/public/data/calendar_events');
         }
       };
 
