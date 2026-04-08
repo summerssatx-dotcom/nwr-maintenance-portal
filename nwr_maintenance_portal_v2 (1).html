@@ -641,7 +641,7 @@
           await db.collection('artifacts').doc(appId).collection('public').doc('data')
             .collection('inspections').add({
               ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-              timestamp: new Date().toISOString(), techId: user?.uid
+              timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
             });
           alert('✓ Saved!');
           setStep(1); setData({}); setTxType(null);
