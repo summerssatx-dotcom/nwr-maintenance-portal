@@ -1360,7 +1360,7 @@
                 ))}
               </div>
             </div>
-            <div className="p-6 max-h-[75vh] overflow-y-auto">{renderStep()}</div>
+            <div className="p-6 min-h-[65vh] max-h-[75vh] overflow-y-auto">{renderStep()}</div>
             <div className="p-5 border-t border-slate-700/50 bg-slate-900/50 flex justify-between items-center">
               {step > 1 ? <button onClick={() => setStep(step - 1)} className="px-5 py-2 rounded-xl bg-slate-700 text-white font-medium">← Back</button> : <div />}
               <div className="flex gap-3">
