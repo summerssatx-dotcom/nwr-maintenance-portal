@@ -710,6 +710,20 @@
       const set = (f, v) => setData(p => ({ ...p, [f]: v }));
       const site = SITES.find(s => s.id === data.siteId);
 
+      const txCls = txType === 'nautel'
+        ? { gradient: 'from-purple-900', activeBg: 'bg-purple-600', iconBg: 'bg-purple-500/20', iconText: 'text-purple-400', badgeBg: 'bg-purple-700', sectionText: 'text-purple-400' }
+        : txType === 'crown'
+        ? { gradient: 'from-teal-900', activeBg: 'bg-teal-600', iconBg: 'bg-teal-500/20', iconText: 'text-teal-400', badgeBg: 'bg-teal-700', sectionText: 'text-teal-400' }
+        : { gradient: 'from-noaa-blue', activeBg: 'bg-noaa-sky', iconBg: 'bg-noaa-sky/20', iconText: 'text-noaa-sky', badgeBg: 'bg-noaa-blue', sectionText: 'text-noaa-sky' };
+
+      const Section = ({ title, num, note }) => (
+        <div className="flex items-center gap-3 mt-6 mb-3 first:mt-0">
+          {num && <span className={`w-8 h-8 rounded-lg ${txCls.badgeBg} text-white flex items-center justify-center text-xs font-bold`}>{`{${num}}`}</span>}
+          <h4 className={`text-xs font-bold ${txCls.sectionText} tracking-widest uppercase`}>{title}</h4>
+          {note && <span className="text-[10px] text-slate-500 italic">({note})</span>}
+        </div>
+      );
+
       const handleSiteChange = (id) => {
         const s = SITES.find(x => x.id === id);
         set('siteId', id);
@@ -1335,24 +1349,24 @@
       return (
         <div className="animate-in">
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-noaa-blue to-slate-900 p-5 border-b border-slate-700/50">
+            <div className={`bg-gradient-to-r ${txCls.gradient} to-slate-900 p-5 border-b border-slate-700/50`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-noaa-sky/20 flex items-center justify-center">
-                    <Icon name="ClipboardList" className="w-5 h-5 text-noaa-sky" />
+                  <div className={`w-10 h-10 rounded-lg ${txCls.iconBg} flex items-center justify-center`}>
+                    <Icon name="ClipboardList" className={`w-5 h-5 ${txCls.iconText}`} />
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-white">{txType ? `${txType.charAt(0).toUpperCase() + txType.slice(1)} Transmitter` : 'NWR Transmitter'}</h2>
-                    <p className="text-xs text-noaa-sky">EWX-NWR Maintenance Form</p>
+                    <p className={`text-xs ${txCls.iconText}`}>EWX-NWR Maintenance Form</p>
                   </div>
                 </div>
-                {site && <div className="text-right"><p className="text-white font-semibold">{site.name}</p><p className="text-xs text-noaa-sky font-mono">{site.call}</p></div>}
+                {site && <div className="text-right"><p className="text-white font-semibold">{site.name}</p><p className={`text-xs ${txCls.iconText} font-mono`}>{site.call}</p></div>}
               </div>
               <div className="flex gap-1 overflow-x-auto pb-1">
                 {steps.map((s, i) => (
                   <Fragment key={s.n}>
                     <button onClick={() => data.siteId && setStep(s.n)} disabled={!data.siteId}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${step === s.n ? 'bg-noaa-sky text-white' : step > s.n ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700/50 text-slate-500'}`}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium ${step === s.n ? `${txCls.activeBg} text-white` : step > s.n ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700/50 text-slate-500'}`}>
                       {step > s.n ? '✓' : s.n} {s.l}
                     </button>
                     {i < steps.length - 1 && <div className={`w-3 h-0.5 self-center ${step > s.n ? 'bg-emerald-500/50' : 'bg-slate-700'}`} />}
