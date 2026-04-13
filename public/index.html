@@ -2793,11 +2793,12 @@
 
       const ResourcesTab = () => {
         const [open, setOpen] = React.useState(null);
-        const BASE = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
-        const ac = BASE + 'ARMSTRONG%20CLASSIC/';
-        const ag = BASE + 'ARMSTRONG%20G1000B/';
-        const cr = BASE + 'CROWN/';
-        const na = BASE + 'NAUTEL/';
+        const RAW = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
+        const view = (url) => `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
+        const ac = RAW + 'ARMSTRONG%20CLASSIC/';
+        const ag = RAW + 'ARMSTRONG%20G1000B/';
+        const cr = RAW + 'CROWN/';
+        const na = RAW + 'NAUTEL/';
         const cards = [
           {
             id: 'nautel', label: 'Nautel',
@@ -2809,10 +2810,10 @@
             sections: [{
               title: null,
               files: [
-                { name: 'NG1000 Operations & Maintenance Manual', url: na + 'NG1000%20-%20Operations%20%26%20Maintenance%20Manual.pdf', manual: true },
-                { name: 'NG1000 Troubleshooting Manual', url: na + 'NG1000%20-%20Troubleshooting%20Manual.pdf' },
-                { name: 'Course Handouts', url: na + 'Nautel%20Course%20Handouts.pdf' },
-                { name: 'NG1000 Transmitter Parts Identifier', url: na + 'NAUTEL%20NG1000%20XMTR%20PARTS%20IDENTIFIER.pdf' },
+                { name: 'NG1000 Operations & Maintenance Manual', url: view(na + 'NG1000%20-%20Operations%20%26%20Maintenance%20Manual.pdf'), manual: true },
+                { name: 'NG1000 Troubleshooting Manual', url: view(na + 'NG1000%20-%20Troubleshooting%20Manual.pdf') },
+                { name: 'Course Handouts', url: view(na + 'Nautel%20Course%20Handouts.pdf') },
+                { name: 'NG1000 Transmitter Parts Identifier', url: view(na + 'NAUTEL%20NG1000%20XMTR%20PARTS%20IDENTIFIER.pdf') },
               ]
             }]
           },
@@ -2827,23 +2828,23 @@
               {
                 title: 'Classic',
                 files: [
-                  { name: 'Armstrong Classic Manual', url: ac + 'Armstrong%20Classic%20-%20MANUAL.pdf', manual: true },
-                  { name: 'Amplifier Alignments', url: ac + 'Amplifier%20Alignments.pdf' },
-                  { name: 'Principles of Operation', url: ac + 'Principles%20of%20Operation.pdf' },
-                  { name: 'Course Handouts', url: ac + 'Course%20Handouts.pdf' },
-                  { name: 'Classic Parts Identifier', url: ac + 'ARMSTRONG%20CLASSIC%20PARTS%20IDENTIFIER.pdf' },
-                  { name: 'Sending Tones to Transmitters', url: ac + 'Sending%20Tones%20to%20Transmitters.pdf' },
+                  { name: 'Armstrong Classic Manual', url: view(ac + 'Armstrong%20Classic%20-%20MANUAL.pdf'), manual: true },
+                  { name: 'Amplifier Alignments', url: view(ac + 'Amplifier%20Alignments.pdf') },
+                  { name: 'Principles of Operation', url: view(ac + 'Principles%20of%20Operation.pdf') },
+                  { name: 'Course Handouts', url: view(ac + 'Course%20Handouts.pdf') },
+                  { name: 'Classic Parts Identifier', url: view(ac + 'ARMSTRONG%20CLASSIC%20PARTS%20IDENTIFIER.pdf') },
+                  { name: 'Sending Tones to Transmitters', url: view(ac + 'Sending%20Tones%20to%20Transmitters.pdf') },
                 ]
               },
               {
                 title: 'G1000B',
                 files: [
-                  { name: 'Armstrong G1000B Manual', url: ag + 'Armstrong%20G1000B%20-%20MANUAL.pdf', manual: true },
-                  { name: 'Course Handouts', url: ag + 'Course%20Handouts.pdf' },
-                  { name: 'G1000B Parts Identifier', url: ag + 'ARMSTRONG%20G1000B%20PARTS%20IDENTIFIER.pdf' },
-                  { name: 'BMH Test Tones', url: ag + 'BMH%20Test%20Tones.pdf' },
-                  { name: 'Sending Tones to Transmitters', url: ag + 'Sending%20Tones%20to%20Transmitters.docx' },
-                  { name: 'Viavi Supplemental Labs A\u2013D', url: ag + 'Viavi%20Supplemental%20Labs%20A%20through%20D.docx' },
+                  { name: 'Armstrong G1000B Manual', url: view(ag + 'Armstrong%20G1000B%20-%20MANUAL.pdf'), manual: true },
+                  { name: 'Course Handouts', url: view(ag + 'Course%20Handouts.pdf') },
+                  { name: 'G1000B Parts Identifier', url: view(ag + 'ARMSTRONG%20G1000B%20PARTS%20IDENTIFIER.pdf') },
+                  { name: 'BMH Test Tones', url: view(ag + 'BMH%20Test%20Tones.pdf') },
+                  { name: 'Sending Tones to Transmitters', url: view(ag + 'Sending%20Tones%20to%20Transmitters.docx') },
+                  { name: 'Viavi Supplemental Labs A\u2013D', url: view(ag + 'Viavi%20Supplemental%20Labs%20A%20through%20D.docx') },
                 ]
               }
             ]
@@ -2858,12 +2859,12 @@
             sections: [{
               title: null,
               files: [
-                { name: 'Crown WRG Manual', url: cr + 'CROWN%20-%20Manual.pdf', manual: true },
-                { name: 'Balancing Center PAs & Common Problems', url: cr + 'CROWN%20-%20Procedures%20to%20Balance%20Center%20PAs%20%26%20Common%20Problems.pdf' },
-                { name: 'Course Handouts', url: cr + 'CROWN%20Course%20Handouts.pdf' },
-                { name: 'WRG1000 Parts Identifier', url: cr + 'CROWN%20WRG1000%20PARTS%20IDENTIFIER.pdf' },
-                { name: 'WRG300 Parts Identifier', url: cr + 'CROWN%20WRG300%20PARTS%20IDENTIFIER.pdf' },
-                { name: 'Theory and Alignment Training Manual', url: cr + 'Theory%20and%20Alignment%20Training%20Manual.pdf' },
+                { name: 'Crown WRG Manual', url: view(cr + 'CROWN%20-%20Manual.pdf'), manual: true },
+                { name: 'Balancing Center PAs & Common Problems', url: view(cr + 'CROWN%20-%20Procedures%20to%20Balance%20Center%20PAs%20%26%20Common%20Problems.pdf') },
+                { name: 'Course Handouts', url: view(cr + 'CROWN%20Course%20Handouts.pdf') },
+                { name: 'WRG1000 Parts Identifier', url: view(cr + 'CROWN%20WRG1000%20PARTS%20IDENTIFIER.pdf') },
+                { name: 'WRG300 Parts Identifier', url: view(cr + 'CROWN%20WRG300%20PARTS%20IDENTIFIER.pdf') },
+                { name: 'Theory and Alignment Training Manual', url: view(cr + 'Theory%20and%20Alignment%20Training%20Manual.pdf') },
               ]
             }]
           },
