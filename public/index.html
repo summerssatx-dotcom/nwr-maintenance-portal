@@ -278,29 +278,22 @@
       const [newPart, setNewPart] = useState({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
 
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-parts-tracker');
-        if (saved) setParts(JSON.parse(saved));
+        return db.collection('parts_tracker').orderBy('addedDate', 'desc').onSnapshot(
+          snap => setParts(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+          err => console.error('Parts tracker error:', err)
+        );
       }, []);
 
-      const saveParts = (updated) => {
-        setParts(updated);
-        localStorage.setItem('nwr-parts-tracker', JSON.stringify(updated));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
-      };
-
-      const addPart = () => {
+      const addPart = async () => {
         if (!newPart.name || !newPart.partNum) return;
-        const part = { ...newPart, id: Date.now(), addedDate: new Date().toISOString() };
-        saveParts([...parts, part]);
+        await db.collection('parts_tracker').add({ ...newPart, addedDate: new Date().toISOString() });
         setNewPart({ name: '', partNum: '', qty: '', site: '', vendor: '', orderDate: '', status: 'ordered' });
         setShowAdd(false);
       };
 
-      const removePart = (id) => saveParts(parts.filter(p => p.id !== id));
+      const removePart = (id) => db.collection('parts_tracker').doc(id).delete();
 
-      const updateStatus = (id, status) => {
-        saveParts(parts.map(p => p.id === id ? { ...p, status } : p));
-      };
+      const updateStatus = (id, status) => db.collection('parts_tracker').doc(id).update({ status });
 
       const statusColor = (status) => {
         switch(status) {
@@ -559,8 +552,10 @@
       const [newEntry, setNewEntry] = useState({ siteId: '', time: '', remarks: '', initials: '' });
 
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-maintenance-log');
-        if (saved) setEntries(JSON.parse(saved));
+        return db.collection('maintenance_log').orderBy('timestamp', 'desc').onSnapshot(
+          snap => setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+          err => console.error('Maintenance log error:', err)
+        );
       }, []);
 
       useEffect(() => {
@@ -572,18 +567,11 @@
         }
       }, [showAdd]);
 
-      const saveEntries = (updated) => {
-        setEntries(updated);
-        localStorage.setItem('nwr-maintenance-log', JSON.stringify(updated));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
-      };
-
-      const addEntry = () => {
+      const addEntry = async () => {
         if (!newEntry.siteId || !newEntry.time || !newEntry.remarks || !newEntry.initials) return;
         const now = new Date();
         const site = SITES.find(s => s.id === newEntry.siteId);
-        const entry = {
-          id: Date.now(),
+        await db.collection('maintenance_log').add({
           date: now.toISOString().split('T')[0],
           time: newEntry.time,
           siteId: newEntry.siteId,
@@ -592,16 +580,13 @@
           remarks: newEntry.remarks,
           initials: newEntry.initials.toUpperCase(),
           timestamp: now.toISOString()
-        };
-        saveEntries([entry, ...entries]); // Newest first
+        });
         setNewEntry({ siteId: '', time: '', remarks: '', initials: '' });
         setShowAdd(false);
       };
 
       const deleteEntry = (id) => {
-        if (confirm('Delete this log entry?')) {
-          saveEntries(entries.filter(e => e.id !== id));
-        }
+        if (confirm('Delete this log entry?')) db.collection('maintenance_log').doc(id).delete();
       };
 
       return (
@@ -1701,9 +1686,7 @@
       };
 
       const bumpLastUpdated = () => {
-        const ts = new Date().toISOString();
-        localStorage.setItem('nwr-last-updated', ts);
-        window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
       };
 
       const saveEvent = async () => {
@@ -1930,26 +1913,30 @@
     // Dashboard
     // Site Status Overview
     const SiteStatusOverview = () => {
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
-      const [reasons, setReasons] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status-reasons');
-        return saved ? JSON.parse(saved) : {};
-      });
       const [pendingChange, setPendingChange] = useState(null);
       const [reasonDraft, setReasonDraft] = useState('');
+      useEffect(() => {
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
+      }, []);
+      const saveStatus = (newStatuses, newReasons) => {
+        db.collection('config').doc('site_status').set({ statuses: newStatuses, reasons: newReasons });
+        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
+      };
       const updateStatus = (id, value) => {
         const updated = { ...statuses, [id]: value };
         setStatuses(updated);
-        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+        saveStatus(updated, reasons);
       };
       const updateReasons = (updated) => {
         setReasons(updated);
-        localStorage.setItem('nwr-site-status-reasons', JSON.stringify(updated));
+        saveStatus(statuses, updated);
       };
       const handleStatusChange = (id, value) => {
         if (value === 'ONLINE') {
@@ -1966,14 +1953,6 @@
         setPendingChange(null); setReasonDraft('');
       };
       const cancelPendingChange = () => { setPendingChange(null); setReasonDraft(''); };
-      useEffect(() => {
-        const onStorage = (e) => {
-          if (e.key === 'nwr-site-status') setStatuses(e.newValue ? JSON.parse(e.newValue) : {});
-          if (e.key === 'nwr-site-status-reasons') setReasons(e.newValue ? JSON.parse(e.newValue) : {});
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
-      }, []);
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
       const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
       const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
@@ -2058,13 +2037,11 @@
       const pastDue = events.filter(e => !e.completed && e.date < today).length;
       const completed = events.filter(e => e.completed).length;
 
-      const [lastUpdatedRaw, setLastUpdatedRaw] = React.useState(() => localStorage.getItem('nwr-last-updated'));
+      const [lastUpdatedRaw, setLastUpdatedRaw] = React.useState(null);
       React.useEffect(() => {
-        const onStorage = (e) => { if (e.key === 'nwr-last-updated') setLastUpdatedRaw(e.newValue); };
-        const onCustom = (e) => setLastUpdatedRaw(e.detail);
-        window.addEventListener('storage', onStorage);
-        window.addEventListener('nwr-last-updated', onCustom);
-        return () => { window.removeEventListener('storage', onStorage); window.removeEventListener('nwr-last-updated', onCustom); };
+        return db.collection('config').doc('last_updated').onSnapshot(snap => {
+          if (snap.exists) setLastUpdatedRaw(snap.data().ts);
+        });
       }, []);
       const lastUpdated = lastUpdatedRaw
         ? new Date(lastUpdatedRaw).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
@@ -2164,22 +2141,14 @@
 
       // Load and filter maintenance log entries
       useEffect(() => {
-        const saved = localStorage.getItem('nwr-maintenance-log');
-        if (saved) {
-          const allLogs = JSON.parse(saved);
+        return db.collection('maintenance_log').orderBy('timestamp', 'desc').onSnapshot(snap => {
           const cutoff = new Date();
           cutoff.setDate(cutoff.getDate() - parseInt(timeRange));
-          
-          let filtered = allLogs.filter(log => new Date(log.timestamp) >= cutoff);
-          
-          if (selectedSite !== 'all') {
-            filtered = filtered.filter(log => log.siteId === selectedSite);
-          }
-          
+          let filtered = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .filter(e => new Date(e.timestamp) >= cutoff);
+          if (selectedSite !== 'all') filtered = filtered.filter(e => e.siteId === selectedSite);
           setLogEntries(filtered);
-        } else {
-          setLogEntries([]);
-        }
+        });
       }, [timeRange, selectedSite]);
 
       const exportCSV = () => {
@@ -2535,19 +2504,24 @@
 
     // Admin Tab
     const AdminTab = () => {
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
+      useEffect(() => {
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
+      }, []);
       const cycleStatus = (id) => {
         const order = ['ONLINE', 'DEGRADED', 'OFFLINE'];
         const current = getStatus(id);
         const next = order[(order.indexOf(current) + 1) % order.length];
         const updated = { ...statuses, [id]: next };
         setStatuses(updated);
-        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+        db.collection('config').doc('site_status').set({ statuses: updated, reasons });
+        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
       };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : s === 'DEGRADED' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10';
       return (
@@ -2582,23 +2556,15 @@
     const SitesList = () => {
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
-      const [reasons, setReasons] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status-reasons');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
-
       useEffect(() => {
-        const onStorage = (e) => {
-          if (e.key === 'nwr-site-status') setStatuses(e.newValue ? JSON.parse(e.newValue) : {});
-          if (e.key === 'nwr-site-status-reasons') setReasons(e.newValue ? JSON.parse(e.newValue) : {});
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
       }, []);
 
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
