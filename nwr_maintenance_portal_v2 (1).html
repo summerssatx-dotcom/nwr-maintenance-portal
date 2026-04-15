@@ -1930,26 +1930,30 @@
     // Dashboard
     // Site Status Overview
     const SiteStatusOverview = () => {
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
-      const [reasons, setReasons] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status-reasons');
-        return saved ? JSON.parse(saved) : {};
-      });
       const [pendingChange, setPendingChange] = useState(null);
       const [reasonDraft, setReasonDraft] = useState('');
+      useEffect(() => {
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
+      }, []);
+      const saveStatus = (newStatuses, newReasons) => {
+        db.collection('config').doc('site_status').set({ statuses: newStatuses, reasons: newReasons });
+        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+      };
       const updateStatus = (id, value) => {
         const updated = { ...statuses, [id]: value };
         setStatuses(updated);
-        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
-        const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
+        saveStatus(updated, reasons);
       };
       const updateReasons = (updated) => {
         setReasons(updated);
-        localStorage.setItem('nwr-site-status-reasons', JSON.stringify(updated));
+        saveStatus(statuses, updated);
       };
       const handleStatusChange = (id, value) => {
         if (value === 'ONLINE') {
@@ -1966,14 +1970,6 @@
         setPendingChange(null); setReasonDraft('');
       };
       const cancelPendingChange = () => { setPendingChange(null); setReasonDraft(''); };
-      useEffect(() => {
-        const onStorage = (e) => {
-          if (e.key === 'nwr-site-status') setStatuses(e.newValue ? JSON.parse(e.newValue) : {});
-          if (e.key === 'nwr-site-status-reasons') setReasons(e.newValue ? JSON.parse(e.newValue) : {});
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
-      }, []);
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400' : s === 'DEGRADED' ? 'text-yellow-400' : 'text-red-400';
       const statusBg = (s) => s === 'ONLINE' ? 'border-emerald-500/30 bg-emerald-500/5' : s === 'DEGRADED' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-red-500/30 bg-red-500/5';
       const faceIcon = (s) => s === 'ONLINE' ? 'Smile' : s === 'DEGRADED' ? 'Meh' : 'Frown';
@@ -2535,18 +2531,23 @@
 
     // Admin Tab
     const AdminTab = () => {
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
+      useEffect(() => {
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
+      }, []);
       const cycleStatus = (id) => {
         const order = ['ONLINE', 'DEGRADED', 'OFFLINE'];
         const current = getStatus(id);
         const next = order[(order.indexOf(current) + 1) % order.length];
         const updated = { ...statuses, [id]: next };
         setStatuses(updated);
-        localStorage.setItem('nwr-site-status', JSON.stringify(updated));
+        db.collection('config').doc('site_status').set({ statuses: updated, reasons });
         const ts = new Date().toISOString(); localStorage.setItem('nwr-last-updated', ts); window.dispatchEvent(new CustomEvent('nwr-last-updated', { detail: ts }));
       };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : s === 'DEGRADED' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10';
@@ -2582,23 +2583,15 @@
     const SitesList = () => {
       const [q, setQ] = useState('');
       const [expanded, setExpanded] = useState({});
-      const [statuses, setStatuses] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status');
-        return saved ? JSON.parse(saved) : {};
-      });
-      const [reasons, setReasons] = useState(() => {
-        const saved = localStorage.getItem('nwr-site-status-reasons');
-        return saved ? JSON.parse(saved) : {};
-      });
+      const [statuses, setStatuses] = useState({});
+      const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
-
       useEffect(() => {
-        const onStorage = (e) => {
-          if (e.key === 'nwr-site-status') setStatuses(e.newValue ? JSON.parse(e.newValue) : {});
-          if (e.key === 'nwr-site-status-reasons') setReasons(e.newValue ? JSON.parse(e.newValue) : {});
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
+        return db.collection('config').doc('site_status').onSnapshot(snap => {
+          const d = snap.data() || {};
+          setStatuses(d.statuses || {});
+          setReasons(d.reasons || {});
+        });
       }, []);
 
       const filtered = SITES.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.call.toLowerCase().includes(q.toLowerCase()) || s.tx.toLowerCase().includes(q.toLowerCase()));
