@@ -530,13 +530,13 @@
         <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
         <div className="flex gap-2">
           <div className="flex-1">
-            <input type="number" value={data[dbm] || ''} onChange={e => set(dbm, e.target.value)} placeholder="dBm"
+            <input value={data[dbm] || ''} onChange={e => set(dbm, e.target.value)} placeholder="dBm"
               className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
             <span className="text-[10px] text-slate-500">dBm</span>
           </div>
           <span className="text-slate-500 self-center text-xs">or</span>
           <div className="flex-1">
-            <input type="number" value={data[vrms] || ''} onChange={e => set(vrms, e.target.value)} placeholder="Vrms"
+            <input value={data[vrms] || ''} onChange={e => set(vrms, e.target.value)} placeholder="Vrms"
               className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
             <span className="text-[10px] text-slate-500">Vrms</span>
           </div>
@@ -872,7 +872,7 @@
 
       const steps = [
         { n: 1, l: 'Site' }, { n: 2, l: '1-3' }, { n: 3, l: '4-5' }, { n: 4, l: '6-7' },
-        { n: 5, l: '8' }, { n: 6, l: '9' }, { n: 7, l: '10' }, { n: 8, l: '11' }
+        { n: 5, l: '8' }, { n: 6, l: '9' }, { n: 7, l: '11' }
       ];
 
       // Step 1: Site
@@ -915,8 +915,8 @@
           <Input label="Defective Fans Found" field="defectiveFans" data={data} set={set} />
           <Section title="AC Input, Surge, ROAMS" num="3" />
           <div className="grid grid-cols-2 gap-4">
-            <Input label={`AC Input ${txLabel(1)}`} field="ac1" data={data} set={set} type="number" unit="V" />
-            <Input label={`AC Input ${txLabel(2)}`} field="ac2" data={data} set={set} type="number" unit="V" />
+            <Input label={`AC Input ${txLabel(1)}`} field="ac1" data={data} set={set} unit="V" />
+            <Input label={`AC Input ${txLabel(2)}`} field="ac2" data={data} set={set} unit="V" />
           </div>
           <Radio label="Surge Protector OK?" field="surgeOk" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
           <div className="grid grid-cols-2 gap-4">
@@ -941,8 +941,8 @@
           <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
             <p className="text-xs text-slate-400 font-bold uppercase mb-2">External Power Meter (Output of Cavity)</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Fwd Pwr" field={`${p}_ext_fwd`} data={data} set={set} type="number" unit="W" small />
-              <Input label="Refl Pwr" field={`${p}_ext_refl`} data={data} set={set} type="number" unit="W" small />
+              <Input label="Fwd Pwr" field={`${p}_ext_fwd`} data={data} set={set} unit="W" small />
+              <Input label="Refl Pwr" field={`${p}_ext_refl`} data={data} set={set} unit="W" small />
             </div>
           </div>
 
@@ -951,28 +951,28 @@
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel Meter</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Exciter Pwr" field={`${p}_fp_exc_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Exciter Rfl" field={`${p}_fp_exc_refl`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="Exciter Pwr" field={`${p}_fp_exc_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Exciter Rfl" field={`${p}_fp_exc_refl`} data={data} set={set} unit="W" small />
                 </div>
                 {isClassic && (
                   <div className="grid grid-cols-2 gap-3 mt-2">
-                    <Input label="Comb Fwd" field={`${p}_fp_comb_fwd`} data={data} set={set} type="number" unit="W" small classic />
-                    <Input label="Comb Rfl" field={`${p}_fp_comb_refl`} data={data} set={set} type="number" unit="W" small classic />
+                    <Input label="Comb Fwd" field={`${p}_fp_comb_fwd`} data={data} set={set} unit="W" small classic />
+                    <Input label="Comb Rfl" field={`${p}_fp_comb_refl`} data={data} set={set} unit="W" small classic />
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 mt-2">
-                  <Input label="PA1 Fwd" field={`${p}_fp_pa1_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="PA1 Rfl" field={`${p}_fp_pa1_refl`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="PA1 Fwd" field={`${p}_fp_pa1_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="PA1 Rfl" field={`${p}_fp_pa1_refl`} data={data} set={set} unit="W" small />
                 </div>
                 {isClassic && (
                   <Fragment>
                     <div className="grid grid-cols-2 gap-3 mt-2">
-                      <Input label="PA2 Fwd" field={`${p}_fp_pa2_fwd`} data={data} set={set} type="number" unit="W" small classic />
-                      <Input label="PA2 Rfl" field={`${p}_fp_pa2_refl`} data={data} set={set} type="number" unit="W" small classic />
+                      <Input label="PA2 Fwd" field={`${p}_fp_pa2_fwd`} data={data} set={set} unit="W" small classic />
+                      <Input label="PA2 Rfl" field={`${p}_fp_pa2_refl`} data={data} set={set} unit="W" small classic />
                     </div>
                     <div className="grid grid-cols-2 gap-3 mt-2">
-                      <Input label="PA3 Fwd" field={`${p}_fp_pa3_fwd`} data={data} set={set} type="number" unit="W" small classic />
-                      <Input label="PA3 Rfl" field={`${p}_fp_pa3_refl`} data={data} set={set} type="number" unit="W" small classic />
+                      <Input label="PA3 Fwd" field={`${p}_fp_pa3_fwd`} data={data} set={set} unit="W" small classic />
+                      <Input label="PA3 Rfl" field={`${p}_fp_pa3_refl`} data={data} set={set} unit="W" small classic />
                     </div>
                   </Fragment>
                 )}
@@ -980,17 +980,17 @@
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Sys Fwd" field={`${p}_lp_sys_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Sys Rfl" field={`${p}_lp_sys_refl`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Fwd Pwr" field={`${p}_lp_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Rfl Pwr" field={`${p}_lp_refl`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="Sys Fwd" field={`${p}_lp_sys_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Sys Rfl" field={`${p}_lp_sys_refl`} data={data} set={set} unit="W" small />
+                  <Input label="Fwd Pwr" field={`${p}_lp_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Rfl Pwr" field={`${p}_lp_refl`} data={data} set={set} unit="W" small />
                 </div>
-                <div className="mt-2"><Input label="Exciter Pwr" field={`${p}_lp_exc`} data={data} set={set} type="number" unit="W" small /></div>
-                <div className="mt-2"><Input label="PA1 Fwd" field={`${p}_lp_pa1_fwd`} data={data} set={set} type="number" unit="W" small /></div>
+                <div className="mt-2"><Input label="Exciter Pwr" field={`${p}_lp_exc`} data={data} set={set} unit="W" small /></div>
+                <div className="mt-2"><Input label="PA1 Fwd" field={`${p}_lp_pa1_fwd`} data={data} set={set} unit="W" small /></div>
                 {isClassic && (
                   <Fragment>
-                    <div className="mt-2"><Input label="PA2 Fwd" field={`${p}_lp_pa2_fwd`} data={data} set={set} type="number" unit="W" small classic /></div>
-                    <div className="mt-2"><Input label="PA3 Fwd" field={`${p}_lp_pa3_fwd`} data={data} set={set} type="number" unit="W" small classic /></div>
+                    <div className="mt-2"><Input label="PA2 Fwd" field={`${p}_lp_pa2_fwd`} data={data} set={set} unit="W" small classic /></div>
+                    <div className="mt-2"><Input label="PA3 Fwd" field={`${p}_lp_pa3_fwd`} data={data} set={set} unit="W" small classic /></div>
                   </Fragment>
                 )}
               </div>
@@ -999,18 +999,18 @@
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel / Laptop</p>
                 <p className="text-xs text-slate-500 mb-2">{!isClassic && '(PA2, PA3 not used in G100/G300)'}</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="PA1 V" field={`${p}_pa1_v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="PA1 A" field={`${p}_pa1_a`} data={data} set={set} type="number" unit="A" small />
+                  <Input label="PA1 V" field={`${p}_pa1_v`} data={data} set={set} unit="V" small />
+                  <Input label="PA1 A" field={`${p}_pa1_a`} data={data} set={set} unit="A" small />
                 </div>
                 {isClassic && (
                   <Fragment>
                     <div className="grid grid-cols-2 gap-3 mt-2">
-                      <Input label="PA2 V" field={`${p}_pa2_v`} data={data} set={set} type="number" unit="V" small classic />
-                      <Input label="PA2 A" field={`${p}_pa2_a`} data={data} set={set} type="number" unit="A" small classic />
+                      <Input label="PA2 V" field={`${p}_pa2_v`} data={data} set={set} unit="V" small classic />
+                      <Input label="PA2 A" field={`${p}_pa2_a`} data={data} set={set} unit="A" small classic />
                     </div>
                     <div className="grid grid-cols-2 gap-3 mt-2">
-                      <Input label="PA3 V" field={`${p}_pa3_v`} data={data} set={set} type="number" unit="V" small classic />
-                      <Input label="PA3 A" field={`${p}_pa3_a`} data={data} set={set} type="number" unit="A" small classic />
+                      <Input label="PA3 V" field={`${p}_pa3_v`} data={data} set={set} unit="V" small classic />
+                      <Input label="PA3 A" field={`${p}_pa3_a`} data={data} set={set} unit="A" small classic />
                     </div>
                   </Fragment>
                 )}
@@ -1024,38 +1024,18 @@
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel</p>
                 <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="RF Power" field={`${p}_fp_rf`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Ant SWR" field={`${p}_fp_swr`} data={data} set={set} type="number" small />
+                  <Input label="RF Power" field={`${p}_fp_rf`} data={data} set={set} unit="W" small />
+                  <Input label="Ant SWR" field={`${p}_fp_swr`} data={data} set={set} small />
                 </div>
                 {is1KW && (
                   <Fragment>
                     <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Power Amplifiers</p>
                     <div className="grid grid-cols-2 gap-3">
-                      <Input label="Power Out" field={`${p}_fp_pwr`} data={data} set={set} type="number" unit="W" small />
-                      <Input label="PA Temp" field={`${p}_fp_temp`} data={data} set={set} type="number" unit="°" small />
-                      <Input label="In Ref" field={`${p}_fp_inref`} data={data} set={set} type="number" unit="W" small />
-                      <Input label="SWR" field={`${p}_fp_1kw_swr`} data={data} set={set} type="number" small />
-                      <Input label="ACC" field={`${p}_fp_acc`} data={data} set={set} type="number" small />
-                    </div>
-                  </Fragment>
-                )}
-              </div>
-              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface</p>
-                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label="RF Power" field={`${p}_li_rf`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Ant SWR" field={`${p}_li_swr`} data={data} set={set} type="number" small />
-                </div>
-                {is1KW && (
-                  <Fragment>
-                    <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Power Amplifiers</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input label="Power Out" field={`${p}_li_pwr`} data={data} set={set} type="number" unit="W" small />
-                      <Input label="PA Temp" field={`${p}_li_temp`} data={data} set={set} type="number" unit="°" small />
-                      <Input label="In Ref" field={`${p}_li_inref`} data={data} set={set} type="number" unit="W" small />
-                      <Input label="SWR" field={`${p}_li_1kw_swr`} data={data} set={set} type="number" small />
-                      <Input label="ACC" field={`${p}_li_acc`} data={data} set={set} type="number" small />
+                      <Input label="Power Out" field={`${p}_fp_pwr`} data={data} set={set} unit="W" small />
+                      <Input label="PA Temp" field={`${p}_fp_temp`} data={data} set={set} unit="°" small />
+                      <Input label="In Ref" field={`${p}_fp_inref`} data={data} set={set} unit="W" small />
+                      <Input label="SWR" field={`${p}_fp_1kw_swr`} data={data} set={set} small />
+                      <Input label="ACC" field={`${p}_fp_acc`} data={data} set={set} small />
                     </div>
                   </Fragment>
                 )}
@@ -1065,42 +1045,23 @@
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel</p>
                 <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="PA DC V" field={`${p}_dc_v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="PA DC A" field={`${p}_dc_a`} data={data} set={set} type="number" unit="A" small />
+                  <Input label="PA DC V" field={`${p}_dc_v`} data={data} set={set} unit="V" small />
+                  <Input label="PA DC A" field={`${p}_dc_a`} data={data} set={set} unit="A" small />
                 </div>
                 {is1KW && (
                   <Fragment>
                     <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Amplifiers</p>
                     <div className="grid grid-cols-2 gap-3">
-                      <Input label="PA Voltage" field={`${p}_pa_v`} data={data} set={set} type="number" unit="V" small />
-                      <Input label="Tot Current" field={`${p}_tot_a`} data={data} set={set} type="number" unit="A" small />
+                      <Input label="PA Voltage" field={`${p}_pa_v`} data={data} set={set} unit="V" small />
+                      <Input label="Tot Current" field={`${p}_tot_a`} data={data} set={set} unit="A" small />
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-2">
-                      {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_pa${i}`} data={data} set={set} type="number" unit="A" small />)}
+                      {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_pa${i}`} data={data} set={set} unit="A" small />)}
                     </div>
                   </Fragment>
                 )}
               </div>
-              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface</p>
-                <p className="text-xs text-teal-400 font-semibold mb-2">100/300 Exciter/Power Amp</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label="PA DC V" field={`${p}_li_dc_v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="PA DC A" field={`${p}_li_dc_a`} data={data} set={set} type="number" unit="A" small />
-                </div>
-                {is1KW && (
-                  <Fragment>
-                    <p className="text-xs text-teal-400 font-semibold mb-2 mt-3">1000W Amplifiers</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input label="PA Voltage" field={`${p}_li_pa_v`} data={data} set={set} type="number" unit="V" small />
-                      <Input label="Tot Current" field={`${p}_li_tot_a`} data={data} set={set} type="number" unit="A" small />
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 mt-2">
-                      {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_li_pa${i}`} data={data} set={set} type="number" unit="A" small />)}
-                    </div>
-                  </Fragment>
-                )}
-              </div>
+
             </Fragment>
           )}
 
@@ -1110,59 +1071,59 @@
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel</p>
                 <p className="text-xs text-purple-400 font-semibold mb-2">System</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Sys Fwd" field={`${p}_fp_sys_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Sys Rfl" field={`${p}_fp_sys_refl`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="Sys Fwd" field={`${p}_fp_sys_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Sys Rfl" field={`${p}_fp_sys_refl`} data={data} set={set} unit="W" small />
                 </div>
                 <p className="text-xs text-purple-400 font-semibold mb-2 mt-3">{p.toUpperCase()}</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Active PA" field={`${p}_fp_active_pa`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="IPA Fwd" field={`${p}_fp_ipa`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Fwd Pwr" field={`${p}_fp_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Rfl Pwr" field={`${p}_fp_refl`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="VSWR" field={`${p}_fp_vswr`} data={data} set={set} type="number" small />
+                  <Input label="Active PA" field={`${p}_fp_active_pa`} data={data} set={set} unit="W" small />
+                  <Input label="IPA Fwd" field={`${p}_fp_ipa`} data={data} set={set} unit="W" small />
+                  <Input label="Fwd Pwr" field={`${p}_fp_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Rfl Pwr" field={`${p}_fp_refl`} data={data} set={set} unit="W" small />
+                  <Input label="VSWR" field={`${p}_fp_vswr`} data={data} set={set} small />
                 </div>
               </div>
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">PC Interface</p>
                 <div className="grid grid-cols-3 gap-2">
-                  <Input label="Sys Fwd" field={`${p}_pc_sys_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Sys Rfl" field={`${p}_pc_sys_refl`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="VSWR" field={`${p}_pc_vswr`} data={data} set={set} type="number" small />
+                  <Input label="Sys Fwd" field={`${p}_pc_sys_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Sys Rfl" field={`${p}_pc_sys_refl`} data={data} set={set} unit="W" small />
+                  <Input label="VSWR" field={`${p}_pc_vswr`} data={data} set={set} small />
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-2">
-                  <Input label="Fwd Pwr" field={`${p}_pc_fwd`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Refl Pwr" field={`${p}_pc_refl`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="Active PA" field={`${p}_pc_active`} data={data} set={set} type="number" unit="W" small />
-                  <Input label="IPA Pwr" field={`${p}_pc_ipa`} data={data} set={set} type="number" unit="W" small />
+                  <Input label="Fwd Pwr" field={`${p}_pc_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Refl Pwr" field={`${p}_pc_refl`} data={data} set={set} unit="W" small />
+                  <Input label="Active PA" field={`${p}_pc_active`} data={data} set={set} unit="W" small />
+                  <Input label="IPA Pwr" field={`${p}_pc_ipa`} data={data} set={set} unit="W" small />
                 </div>
               </div>
               <Section title="PA Currents, Voltages, Fan Speeds" num="5" />
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-xs text-purple-400 font-semibold mb-2">PA Currents</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_pa${i}`} data={data} set={set} type="number" unit="A" small />)}
+                  {[1,2,3,4,5,6,7,8].map(i => <Input key={i} label={`PA${i}`} field={`${p}_pa${i}`} data={data} set={set} unit="A" small />)}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-2">
-                  <Input label="Preamp" field={`${p}_preamp`} data={data} set={set} type="number" unit="A" small />
-                  <Input label="IPA Cur" field={`${p}_ipa_cur`} data={data} set={set} type="number" unit="A" small />
-                  <Input label="Tot PA" field={`${p}_tot_pa`} data={data} set={set} type="number" unit="A" small />
+                  <Input label="Preamp" field={`${p}_preamp`} data={data} set={set} unit="A" small />
+                  <Input label="IPA Cur" field={`${p}_ipa_cur`} data={data} set={set} unit="A" small />
+                  <Input label="Tot PA" field={`${p}_tot_pa`} data={data} set={set} unit="A" small />
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-2">
-                  <Input label="PA Volts A" field={`${p}_pa_v_a`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="PA Volts B" field={`${p}_pa_v_b`} data={data} set={set} type="number" unit="V" small />
+                  <Input label="PA Volts A" field={`${p}_pa_v_a`} data={data} set={set} unit="V" small />
+                  <Input label="PA Volts B" field={`${p}_pa_v_b`} data={data} set={set} unit="V" small />
                 </div>
                 <p className="text-xs text-purple-400 font-semibold mb-2 mt-3">Voltage Rails</p>
                 <div className="grid grid-cols-3 gap-2">
-                  <Input label="+48V" field={`${p}_48v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="+15V" field={`${p}_15v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="-15V" field={`${p}_n15v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="+5V" field={`${p}_5v`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="+3.3V" field={`${p}_3v3`} data={data} set={set} type="number" unit="V" small />
-                  <Input label="+1.8V" field={`${p}_1v8`} data={data} set={set} type="number" unit="V" small />
+                  <Input label="+48V" field={`${p}_48v`} data={data} set={set} unit="V" small />
+                  <Input label="+15V" field={`${p}_15v`} data={data} set={set} unit="V" small />
+                  <Input label="-15V" field={`${p}_n15v`} data={data} set={set} unit="V" small />
+                  <Input label="+5V" field={`${p}_5v`} data={data} set={set} unit="V" small />
+                  <Input label="+3.3V" field={`${p}_3v3`} data={data} set={set} unit="V" small />
+                  <Input label="+1.8V" field={`${p}_1v8`} data={data} set={set} unit="V" small />
                 </div>
                 <p className="text-xs text-purple-400 font-semibold mb-2 mt-3">Fan Tach (RPM)</p>
                 <div className="grid grid-cols-5 gap-2">
-                  {[1,2,3,4,5].map(i => <Input key={i} label={`Fan${i}`} field={`${p}_fan${i}`} data={data} set={set} type="number" small />)}
+                  {[1,2,3,4,5].map(i => <Input key={i} label={`Fan${i}`} field={`${p}_fan${i}`} data={data} set={set} small />)}
                 </div>
               </div>
             </Fragment>
@@ -1177,10 +1138,10 @@
           <div className="space-y-3 animate-in">
             <Section title="Carrier Frequency Error" num="6" note="Within ±200 Hz" />
             <div className="grid grid-cols-2 gap-3">
-              <Input label={`Initial ${txLabel(1)}`} field="freq_init_1" data={data} set={set} type="number" unit="MHz" />
-              <Input label={`Final ${txLabel(1)}`} field="freq_final_1" data={data} set={set} type="number" unit="MHz" />
-              <Input label={`Initial ${txLabel(2)}`} field="freq_init_2" data={data} set={set} type="number" unit="MHz" />
-              <Input label={`Final ${txLabel(2)}`} field="freq_final_2" data={data} set={set} type="number" unit="MHz" />
+              <Input label={`Initial ${txLabel(1)}`} field="freq_init_1" data={data} set={set} unit="MHz" />
+              <Input label={`Final ${txLabel(1)}`} field="freq_final_1" data={data} set={set} unit="MHz" />
+              <Input label={`Initial ${txLabel(2)}`} field="freq_init_2" data={data} set={set} unit="MHz" />
+              <Input label={`Final ${txLabel(2)}`} field="freq_final_2" data={data} set={set} unit="MHz" />
             </div>
             <Section title="Voice Modulation and Deviation Quality" num="7" note="Must not exceed 5 kHz" />
             <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
@@ -1211,7 +1172,7 @@
                     <p className="text-xs text-slate-400 mb-2">External Audio Source (-10 dBm)</p>
                     <div className="grid grid-cols-2 gap-3">
                       <DualInput label="Source Level" dbm={`audio${n}_src_dbm`} vrms={`audio${n}_src_vrms`} data={data} set={set} />
-                      <Input label="Modulation" field={`audio${n}_src_mod`} data={data} set={set} type="number" unit="kHz" />
+                      <Input label="Modulation" field={`audio${n}_src_mod`} data={data} set={set} unit="kHz" />
                     </div>
                   </div>
                 )}
@@ -1219,21 +1180,21 @@
                   <p className="text-xs text-slate-400 mb-2">1050 Hz Alert Tone (-9 to -12 dBm)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <DualInput label="Alert Tone" dbm={`audio${n}_alert_dbm`} vrms={`audio${n}_alert_vrms`} data={data} set={set} />
-                    <Input label="Modulation" field={`audio${n}_alert_mod`} data={data} set={set} type="number" unit="kHz" />
+                    <Input label="Modulation" field={`audio${n}_alert_mod`} data={data} set={set} unit="kHz" />
                   </div>
                 </div>
                 <div className="mb-3 pb-3 border-b border-slate-700/50">
                   <p className="text-xs text-slate-400 mb-2">SAME Level (H/W) (-14.5 dBm ±0.5)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <DualInput label="SAME H/W" dbm={`audio${n}_hw_dbm`} vrms={`audio${n}_hw_vrms`} data={data} set={set} />
-                    <Input label="Modulation" field={`audio${n}_hw_mod`} data={data} set={set} type="number" unit="kHz" />
+                    <Input label="Modulation" field={`audio${n}_hw_mod`} data={data} set={set} unit="kHz" />
                   </div>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 mb-2">SAME Level (CRS) (-14.5 dBm ±0.5)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <DualInput label="SAME CRS" dbm={`audio${n}_crs_dbm`} vrms={`audio${n}_crs_vrms`} data={data} set={set} />
-                    <Input label="Modulation" field={`audio${n}_crs_mod`} data={data} set={set} type="number" unit="kHz" />
+                    <Input label="Modulation" field={`audio${n}_crs_mod`} data={data} set={set} unit="kHz" />
                   </div>
                 </div>
               </div>
@@ -1262,23 +1223,7 @@
         </div>
       );
 
-      // Step 7: Generator {10}
-      const Step7 = () => {
-        const runtime = txType === 'armstrong' ? '20' : '30';
-        return (
-          <div className="space-y-3 animate-in">
-            <Section title="Backup Generator & Transfer Switch" num="10" note="If applicable" />
-            <Textarea label="Fuel, oil, coolant level normal?" field="gen_fluids" data={data} set={set} />
-            <Textarea label="Air filter still clean?" field="gen_air" data={data} set={set} />
-            <Textarea label="Fluid leaks, electrical, or hose problems?" field="gen_problems" data={data} set={set} />
-            <Textarea label="Transfer Switch performed transfer?" field="gen_transfer" data={data} set={set} />
-            <Radio label={`Generator ran for ${runtime} minutes?`} field="gen_ran" data={data} set={set} options={[{value:'yes',label:'Yes'},{value:'no',label:'No'}]} />
-            {txType === 'armstrong' && <Input label="Hour Meter Reading" field="gen_hours" data={data} set={set} />}
-          </div>
-        );
-      };
-
-      // Step 8: Signal Strength {11}
+      // Step 7: Signal Strength {11}
       const Step8 = () => {
         if (txType === 'nautel') {
           return (
@@ -1303,9 +1248,9 @@
               <div key={deg} className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-white font-bold mb-2">{deg}°</p>
                 <div className="grid grid-cols-4 gap-2">
-                  <Input label="uV/m" field={`sig_${deg}_uvm`} data={data} set={set} type="number" small />
-                  <Input label="dBuV/m" field={`sig_${deg}_db`} data={data} set={set} type="number" small />
-                  <Input label="Dist" field={`sig_${deg}_dist`} data={data} set={set} type="number" unit="mi" small />
+                  <Input label="uV/m" field={`sig_${deg}_uvm`} data={data} set={set} small />
+                  <Input label="dBuV/m" field={`sig_${deg}_db`} data={data} set={set} small />
+                  <Input label="Dist" field={`sig_${deg}_dist`} data={data} set={set} unit="mi" small />
                   <Input label="Lat" field={`sig_${deg}_lat`} data={data} set={set} small />
                 </div>
                 <div className="mt-2"><Input label="Long" field={`sig_${deg}_lng`} data={data} set={set} small /></div>
@@ -1324,8 +1269,7 @@
           case 4: return Step4();
           case 5: return Step5();
           case 6: return Step6();
-          case 7: return Step7();
-          case 8: return Step8();
+          case 7: return Step8();
           default: return null;
         }
       };
@@ -1362,13 +1306,13 @@
             <div className="p-5 border-t border-slate-700/50 bg-slate-900/50 flex justify-between items-center">
               {step > 1 ? <button onClick={() => setStep(step - 1)} className="px-5 py-2 rounded-xl bg-slate-700 text-white font-medium">← Back</button> : <div />}
               <div className="flex gap-3">
-                {step === 8 && (
+                {step === 7 && (
                   <button onClick={exportToPDF} className="px-5 py-2 rounded-xl bg-blue-600 text-white font-medium flex items-center gap-2">
                     <Icon name="FileDown" className="w-4 h-4" />
                     Export PDF
                   </button>
                 )}
-                {step < 8 ? (
+                {step < 7 ? (
                   <button onClick={() => setStep(step + 1)} disabled={!data.siteId} className="px-5 py-2 rounded-xl bg-noaa-light text-white font-medium disabled:opacity-50">Next →</button>
                 ) : (
                   <button onClick={save} disabled={saving || !data.siteId} className="px-6 py-2 rounded-xl bg-emerald-500 text-white font-semibold disabled:opacity-50">
