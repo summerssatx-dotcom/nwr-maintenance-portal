@@ -1873,27 +1873,24 @@
         db.collection('config').doc('site_status').set({ statuses: newStatuses, reasons: newReasons });
         db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
       };
-      const updateStatus = (id, value) => {
-        const updated = { ...statuses, [id]: value };
-        setStatuses(updated);
-        saveStatus(updated, reasons);
-      };
-      const updateReasons = (updated) => {
-        setReasons(updated);
-        saveStatus(statuses, updated);
-      };
       const handleStatusChange = (id, value) => {
         if (value === 'ONLINE') {
-          updateStatus(id, value);
-          const updated = { ...reasons }; delete updated[id]; updateReasons(updated);
+          const newStatuses = { ...statuses, [id]: value };
+          const newReasons = { ...reasons }; delete newReasons[id];
+          setStatuses(newStatuses);
+          setReasons(newReasons);
+          saveStatus(newStatuses, newReasons);
         } else {
           setPendingChange({ siteId: id, newStatus: value });
           setReasonDraft(reasons[id] || '');
         }
       };
       const confirmPendingChange = () => {
-        updateStatus(pendingChange.siteId, pendingChange.newStatus);
-        updateReasons({ ...reasons, [pendingChange.siteId]: reasonDraft });
+        const newStatuses = { ...statuses, [pendingChange.siteId]: pendingChange.newStatus };
+        const newReasons = { ...reasons, [pendingChange.siteId]: reasonDraft };
+        setStatuses(newStatuses);
+        setReasons(newReasons);
+        saveStatus(newStatuses, newReasons);
         setPendingChange(null); setReasonDraft('');
       };
       const cancelPendingChange = () => { setPendingChange(null); setReasonDraft(''); };
