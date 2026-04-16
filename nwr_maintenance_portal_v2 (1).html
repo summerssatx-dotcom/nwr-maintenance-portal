@@ -1630,7 +1630,7 @@
       };
 
       const bumpLastUpdated = () => {
-        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
+        db.collection('artifacts').doc(appId).collection('public').doc('last_updated').set({ ts: new Date().toISOString() });
       };
 
       const saveEvent = async () => {
@@ -1863,15 +1863,15 @@
       const [pendingChange, setPendingChange] = useState(null);
       const [reasonDraft, setReasonDraft] = useState('');
       useEffect(() => {
-        return db.collection('config').doc('site_status').onSnapshot(snap => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('site_status').onSnapshot(snap => {
           const d = snap.data() || {};
           setStatuses(d.statuses || {});
           setReasons(d.reasons || {});
         });
       }, []);
       const saveStatus = (newStatuses, newReasons) => {
-        db.collection('config').doc('site_status').set({ statuses: newStatuses, reasons: newReasons });
-        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
+        db.collection('artifacts').doc(appId).collection('public').doc('site_status').set({ statuses: newStatuses, reasons: newReasons }).catch(err => console.error('site_status write failed:', err));
+        db.collection('artifacts').doc(appId).collection('public').doc('last_updated').set({ ts: new Date().toISOString() });
       };
       const handleStatusChange = (id, value) => {
         if (value === 'ONLINE') {
@@ -1980,7 +1980,7 @@
 
       const [lastUpdatedRaw, setLastUpdatedRaw] = React.useState(null);
       React.useEffect(() => {
-        return db.collection('config').doc('last_updated').onSnapshot(snap => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('last_updated').onSnapshot(snap => {
           if (snap.exists) setLastUpdatedRaw(snap.data().ts);
         });
       }, []);
@@ -2449,7 +2449,7 @@
       const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
       useEffect(() => {
-        return db.collection('config').doc('site_status').onSnapshot(snap => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('site_status').onSnapshot(snap => {
           const d = snap.data() || {};
           setStatuses(d.statuses || {});
           setReasons(d.reasons || {});
@@ -2461,8 +2461,8 @@
         const next = order[(order.indexOf(current) + 1) % order.length];
         const updated = { ...statuses, [id]: next };
         setStatuses(updated);
-        db.collection('config').doc('site_status').set({ statuses: updated, reasons });
-        db.collection('config').doc('last_updated').set({ ts: new Date().toISOString() });
+        db.collection('artifacts').doc(appId).collection('public').doc('site_status').set({ statuses: updated, reasons }).catch(err => console.error('site_status write failed:', err));
+        db.collection('artifacts').doc(appId).collection('public').doc('last_updated').set({ ts: new Date().toISOString() });
       };
       const statusColor = (s) => s === 'ONLINE' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' : s === 'DEGRADED' ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10';
       return (
@@ -2501,7 +2501,7 @@
       const [reasons, setReasons] = useState({});
       const getStatus = (id) => statuses[id] || 'ONLINE';
       useEffect(() => {
-        return db.collection('config').doc('site_status').onSnapshot(snap => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('site_status').onSnapshot(snap => {
           const d = snap.data() || {};
           setStatuses(d.statuses || {});
           setReasons(d.reasons || {});
