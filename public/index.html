@@ -1496,7 +1496,7 @@
         return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
       };
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
 
       return (
         <div className="relative" ref={ref}>
@@ -1584,7 +1584,7 @@
         return () => unsubscribe();
       }, []);
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       const firstDay = new Date(year, month, 1).getDay();
@@ -1976,7 +1976,7 @@
         return () => unsubscribe();
       }, []);
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       const scheduled = events.filter(e => !e.completed && e.date >= today).length;
       const pastDue = events.filter(e => !e.completed && e.date < today).length;
       const completed = events.filter(e => e.completed).length;
