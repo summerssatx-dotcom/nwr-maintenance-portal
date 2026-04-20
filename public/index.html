@@ -779,44 +779,59 @@
         yPos += 10;
 
         // Transmitter 1 Measurements
+        const tx1Label = txType === 'nautel' ? 'TX A' : 'TX 1';
+        const tx2Label = txType === 'nautel' ? 'TX B' : 'TX 2';
+        const tx1Prefix = txType === 'nautel' ? 'txa' : p;
+        const tx2Prefix = txType === 'nautel' ? 'txb' : 'tx2';
+
         doc.setFontSize(12);
         doc.setTextColor(14, 165, 233);
-        doc.text('Transmitter 1 Measurements', 20, yPos);
+        doc.text(`${tx1Label} Measurements`, 20, yPos);
         yPos += 8;
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
-        
-        // Frequency measurements
-        const tx1FreqError = data.tx1_freq_error || 'N/A';
-        const tx1Modulation = data.tx1_modulation || 'N/A';
-        const tx1FwdPower = data.tx1_ext_fwd || 'N/A';
-        
-        doc.text(`Frequency Error: ${tx1FreqError} Hz`, 25, yPos);
+
+        const tx1Rows = [
+          [`Carrier Freq (Initial):`, (data.freq_init_1 || 'N/A') + ' MHz'],
+          [`Carrier Freq (Final):`,   (data.freq_final_1 || 'N/A') + ' MHz'],
+          [`Alert Tone Modulation:`,  (data.audio1_alert_mod || 'N/A') + ' kHz'],
+          [`SAME Modulation (H/W):`,  (data.audio1_hw_mod || 'N/A') + ' kHz'],
+          [`SAME Modulation (CRS):`,  (data.audio1_crs_mod || 'N/A') + ' kHz'],
+          [`Forward Power:`,          (data[`${tx1Prefix}_ext_fwd`] || 'N/A') + ' W'],
+          [`Reflected Power:`,        (data[`${tx1Prefix}_ext_refl`] || 'N/A') + ' W'],
+        ];
+        tx1Rows.forEach(([label, value]) => {
+          doc.setTextColor(100, 116, 139); doc.text(label, 25, yPos);
+          doc.setTextColor(0, 0, 0); doc.text(value, 95, yPos);
+          yPos += 6;
+        });
         yPos += 6;
-        doc.text(`Modulation: ${tx1Modulation} kHz`, 25, yPos);
-        yPos += 6;
-        doc.text(`Forward Power: ${tx1FwdPower} W`, 25, yPos);
-        yPos += 12;
 
         // Transmitter 2 (if not Classic Armstrong)
         if (!isClassic || txType !== 'armstrong') {
+          if (yPos > 250) { doc.addPage(); yPos = 20; }
           doc.setFontSize(12);
           doc.setTextColor(14, 165, 233);
-          doc.text('Transmitter 2 Measurements', 20, yPos);
+          doc.text(`${tx2Label} Measurements`, 20, yPos);
           yPos += 8;
           doc.setFontSize(10);
           doc.setTextColor(0, 0, 0);
-          
-          const tx2FreqError = data.tx2_freq_error || 'N/A';
-          const tx2Modulation = data.tx2_modulation || 'N/A';
-          const tx2FwdPower = data.tx2_ext_fwd || 'N/A';
-          
-          doc.text(`Frequency Error: ${tx2FreqError} Hz`, 25, yPos);
+
+          const tx2Rows = [
+            [`Carrier Freq (Initial):`, (data.freq_init_2 || 'N/A') + ' MHz'],
+            [`Carrier Freq (Final):`,   (data.freq_final_2 || 'N/A') + ' MHz'],
+            [`Alert Tone Modulation:`,  (data.audio2_alert_mod || 'N/A') + ' kHz'],
+            [`SAME Modulation (H/W):`,  (data.audio2_hw_mod || 'N/A') + ' kHz'],
+            [`SAME Modulation (CRS):`,  (data.audio2_crs_mod || 'N/A') + ' kHz'],
+            [`Forward Power:`,          (data[`${tx2Prefix}_ext_fwd`] || 'N/A') + ' W'],
+            [`Reflected Power:`,        (data[`${tx2Prefix}_ext_refl`] || 'N/A') + ' W'],
+          ];
+          tx2Rows.forEach(([label, value]) => {
+            doc.setTextColor(100, 116, 139); doc.text(label, 25, yPos);
+            doc.setTextColor(0, 0, 0); doc.text(value, 95, yPos);
+            yPos += 6;
+          });
           yPos += 6;
-          doc.text(`Modulation: ${tx2Modulation} kHz`, 25, yPos);
-          yPos += 6;
-          doc.text(`Forward Power: ${tx2FwdPower} W`, 25, yPos);
-          yPos += 12;
         }
 
         // Visual Inspection Checklist
