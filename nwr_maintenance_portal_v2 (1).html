@@ -682,14 +682,308 @@
       );
     };
 
-    const InspectionForm = ({ user }) => {
+    const exportInspectionToPDF = (inspData) => {
+      if (!inspData.siteId || !inspData.date) {
+        alert('Cannot export: missing site or date');
+        return;
+      }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      let y = 20;
+      const site = SITES.find(s => s.id === inspData.siteId);
+      const { txType, isClassic, is1KW } = inspData;
+
+      const checkPage = (h = 8) => {
+        if (y + h > pageH - 20) { doc.addPage(); y = 20; }
+      };
+      const addSection = (title) => {
+        checkPage(16);
+        y += 3;
+        doc.setFontSize(11);
+        doc.setTextColor(14, 165, 233);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title, 20, y);
+        doc.setFont('helvetica', 'normal');
+        y += 7;
+        doc.setFontSize(9.5);
+      };
+      const addSubSection = (title) => {
+        checkPage(9);
+        doc.setFontSize(8.5);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title.toUpperCase(), 25, y);
+        doc.setFont('helvetica', 'normal');
+        y += 5;
+      };
+      const addRow = (label, value) => {
+        if (value === null || value === undefined || String(value).trim() === '') return;
+        const str = String(value).trim();
+        checkPage(6);
+        doc.setFontSize(9.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(label, 28, y);
+        doc.setTextColor(15, 23, 42);
+        const lines = doc.splitTextToSize(str, pageW - 105);
+        doc.text(lines, 100, y);
+        y += 5.5 * lines.length;
+      };
+
+      // Header
+      doc.setFontSize(17);
+      doc.setTextColor(14, 165, 233);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NOAA Weather Radio Inspection Report', pageW / 2, y, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      y += 7;
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text('EWX-NWR Compliance Inspection', pageW / 2, y, { align: 'center' });
+      y += 12;
+
+      // Site Information
+      addSection('Site Information');
+      addRow('Site:', inspData.siteName || site?.name);
+      addRow('Call Sign:', site?.call || inspData.siteCall);
+      addRow('Frequency:', site?.freq);
+      addRow('Transmitter:', site?.tx);
+      addRow('Date:', inspData.date);
+      addRow('Technician:', inspData.tech);
+
+      // {1-3} Visual Inspection
+      addSection('{1-3} Visual Inspection & Utility Check');
+      addRow('Filters Replaced:', inspData.filters);
+      addRow('Visual Comments:', inspData.visualComments);
+      addRow('Defective Fans:', inspData.defectiveFans);
+      addRow('AC Input TX1 (V):', inspData.ac1);
+      addRow('AC Input TX2 (V):', inspData.ac2);
+      addRow('Surge Protector OK:', inspData.surgeOk);
+      addRow('ROAMS Battery Date:', inspData.roamsDate);
+      addRow('ROAMS Battery Replaced:', inspData.roamsReplaced);
+
+      // {4-5} Power Measurements
+      const txPrefixes = txType === 'nautel' ? ['txa', 'txb'] : ['tx1', 'tx2'];
+      const txLabels  = txType === 'nautel' ? ['TX A', 'TX B'] : ['TX 1', 'TX 2'];
+      addSection('{4-5} Power Measurements');
+      txPrefixes.forEach((p, i) => {
+        const lbl = txLabels[i];
+        addSubSection(`${lbl} — External Power Meter (Output of Cavity)`);
+        addRow('Forward Power (W):', inspData[`${p}_ext_fwd`]);
+        addRow('Reflected Power (W):', inspData[`${p}_ext_refl`]);
+
+        if (txType === 'crown') {
+          addSubSection(`${lbl} — Front Panel (100/300 Exciter/Power Amp)`);
+          addRow('RF Power (W):', inspData[`${p}_fp_rf`]);
+          addRow('Antenna SWR:', inspData[`${p}_fp_swr`]);
+          if (is1KW) {
+            addSubSection(`${lbl} — Front Panel (1000W Power Amplifiers)`);
+            addRow('Power Output (W):', inspData[`${p}_fp_pwr`]);
+            addRow('PA Temperature (°):', inspData[`${p}_fp_temp`]);
+            addRow('Input Reflected (W):', inspData[`${p}_fp_inref`]);
+            addRow('SWR:', inspData[`${p}_fp_1kw_swr`]);
+            addRow('ACC:', inspData[`${p}_fp_acc`]);
+          }
+          addSubSection(`${lbl} — Exciter/PA Currents & Voltages`);
+          addRow('PA DC Voltage (V):', inspData[`${p}_dc_v`]);
+          addRow('PA DC Current (A):', inspData[`${p}_dc_a`]);
+          if (is1KW) {
+            addRow('PA Voltage (V):', inspData[`${p}_pa_v`]);
+            addRow('Total Current (A):', inspData[`${p}_tot_a`]);
+            const paVals = [1,2,3,4,5,6,7,8].map(n => inspData[`${p}_pa${n}`]).filter(v => v);
+            if (paVals.length) addRow('PA1–PA8 Currents (A):', paVals.join(', '));
+          }
+        }
+
+        if (txType === 'armstrong') {
+          addSubSection(`${lbl} — Front Panel Meter`);
+          addRow('Exciter Fwd (W):', inspData[`${p}_fp_exc_fwd`]);
+          addRow('Exciter Rfl (W):', inspData[`${p}_fp_exc_refl`]);
+          if (isClassic) {
+            addRow('Comb Fwd (W):', inspData[`${p}_fp_comb_fwd`]);
+            addRow('Comb Rfl (W):', inspData[`${p}_fp_comb_refl`]);
+          }
+          addRow('PA1 Fwd (W):', inspData[`${p}_fp_pa1_fwd`]);
+          addRow('PA1 Rfl (W):', inspData[`${p}_fp_pa1_refl`]);
+          if (isClassic) {
+            addRow('PA2 Fwd (W):', inspData[`${p}_fp_pa2_fwd`]);
+            addRow('PA2 Rfl (W):', inspData[`${p}_fp_pa2_refl`]);
+            addRow('PA3 Fwd (W):', inspData[`${p}_fp_pa3_fwd`]);
+            addRow('PA3 Rfl (W):', inspData[`${p}_fp_pa3_refl`]);
+          }
+          addSubSection(`${lbl} — Laptop Interface`);
+          addRow('Sys Fwd (W):', inspData[`${p}_lp_sys_fwd`]);
+          addRow('Sys Rfl (W):', inspData[`${p}_lp_sys_refl`]);
+          addRow('Fwd Power (W):', inspData[`${p}_lp_fwd`]);
+          addRow('Rfl Power (W):', inspData[`${p}_lp_refl`]);
+          addRow('Exciter Power (W):', inspData[`${p}_lp_exc`]);
+          addRow('PA1 Fwd (W):', inspData[`${p}_lp_pa1_fwd`]);
+          if (isClassic) {
+            addRow('PA2 Fwd (W):', inspData[`${p}_lp_pa2_fwd`]);
+            addRow('PA3 Fwd (W):', inspData[`${p}_lp_pa3_fwd`]);
+          }
+          addSubSection(`${lbl} — Exciter/PA Currents & Voltages`);
+          addRow('PA1 Voltage (V):', inspData[`${p}_pa1_v`]);
+          addRow('PA1 Current (A):', inspData[`${p}_pa1_a`]);
+          if (isClassic) {
+            addRow('PA2 Voltage (V):', inspData[`${p}_pa2_v`]);
+            addRow('PA2 Current (A):', inspData[`${p}_pa2_a`]);
+            addRow('PA3 Voltage (V):', inspData[`${p}_pa3_v`]);
+            addRow('PA3 Current (A):', inspData[`${p}_pa3_a`]);
+          }
+        }
+
+        if (txType === 'nautel') {
+          addSubSection(`${lbl} — Front Panel`);
+          addRow('Sys Fwd (W):', inspData[`${p}_fp_sys_fwd`]);
+          addRow('Sys Rfl (W):', inspData[`${p}_fp_sys_refl`]);
+          addRow('Active PA (W):', inspData[`${p}_fp_active_pa`]);
+          addRow('IPA Fwd (W):', inspData[`${p}_fp_ipa`]);
+          addRow('Fwd Power (W):', inspData[`${p}_fp_fwd`]);
+          addRow('Rfl Power (W):', inspData[`${p}_fp_refl`]);
+          addRow('VSWR:', inspData[`${p}_fp_vswr`]);
+          addSubSection(`${lbl} — PC Interface`);
+          addRow('Sys Fwd (W):', inspData[`${p}_pc_sys_fwd`]);
+          addRow('Sys Rfl (W):', inspData[`${p}_pc_sys_refl`]);
+          addRow('VSWR:', inspData[`${p}_pc_vswr`]);
+          addRow('Fwd Power (W):', inspData[`${p}_pc_fwd`]);
+          addRow('Rfl Power (W):', inspData[`${p}_pc_refl`]);
+          addRow('Active PA (W):', inspData[`${p}_pc_active`]);
+          addRow('IPA Power (W):', inspData[`${p}_pc_ipa`]);
+          addSubSection(`${lbl} — PA Currents`);
+          const paCurrs = [1,2,3,4,5,6,7,8].map(n => inspData[`${p}_pa${n}`]).filter(v => v);
+          if (paCurrs.length) addRow('PA1–PA8 (A):', paCurrs.join(', '));
+          addRow('Preamp Current (A):', inspData[`${p}_preamp`]);
+          addRow('IPA Current (A):', inspData[`${p}_ipa_cur`]);
+          addRow('Total PA Current (A):', inspData[`${p}_tot_pa`]);
+          addSubSection(`${lbl} — Voltages & Fan Tach`);
+          addRow('PA Volts A (V):', inspData[`${p}_pa_v_a`]);
+          addRow('PA Volts B (V):', inspData[`${p}_pa_v_b`]);
+          addRow('+48V Rail (V):', inspData[`${p}_48v`]);
+          addRow('+15V Rail (V):', inspData[`${p}_15v`]);
+          addRow('-15V Rail (V):', inspData[`${p}_n15v`]);
+          addRow('+5V Rail (V):', inspData[`${p}_5v`]);
+          addRow('+3.3V Rail (V):', inspData[`${p}_3v3`]);
+          addRow('+1.8V Rail (V):', inspData[`${p}_1v8`]);
+          const fans = [1,2,3,4,5].map(n => inspData[`${p}_fan${n}`]).filter(v => v);
+          if (fans.length) addRow('Fan Tach (RPM):', fans.join(', '));
+        }
+      });
+
+      // {6} Carrier Frequency
+      addSection('{6} Carrier Frequency Error');
+      const t1l = txType === 'nautel' ? 'TX A' : 'TX 1';
+      const t2l = txType === 'nautel' ? 'TX B' : 'TX 2';
+      addRow(`${t1l} Initial (MHz):`, inspData.freq_init_1);
+      addRow(`${t1l} Final (MHz):`, inspData.freq_final_1);
+      addRow(`${t2l} Initial (MHz):`, inspData.freq_init_2);
+      addRow(`${t2l} Final (MHz):`, inspData.freq_final_2);
+
+      // {7} Modulation
+      addSection('{7} Voice Modulation Check');
+      const modStd = txType === 'armstrong' ? '4.8' : '4.5';
+      addRow(`${t1l} CRT ±${modStd} kHz:`, inspData.mod_crt_1);
+      addRow(`${t1l} Mod Meter:`, inspData.mod_meter_1);
+      addRow(`${t2l} CRT ±${modStd} kHz:`, inspData.mod_crt_2);
+      addRow(`${t2l} Mod Meter:`, inspData.mod_meter_2);
+
+      // {8} Audio Input Level
+      addSection('{8} Audio Input Level');
+      [1, 2].forEach(n => {
+        const tl = n === 1 ? t1l : t2l;
+        if (txType !== 'crown') {
+          addSubSection(`${tl} — External Audio Source (-10 dBm)`);
+          addRow('Level (dBm):', inspData[`audio${n}_src_dbm`]);
+          addRow('Level (Vrms):', inspData[`audio${n}_src_vrms`]);
+          addRow('Modulation (kHz):', inspData[`audio${n}_src_mod`]);
+        }
+        addSubSection(`${tl} — 1050 Hz Alert Tone`);
+        addRow('Level (dBm):', inspData[`audio${n}_alert_dbm`]);
+        addRow('Level (Vrms):', inspData[`audio${n}_alert_vrms`]);
+        addRow('Modulation (kHz):', inspData[`audio${n}_alert_mod`]);
+        addSubSection(`${tl} — SAME Level (H/W)`);
+        addRow('Level (dBm):', inspData[`audio${n}_hw_dbm`]);
+        addRow('Level (Vrms):', inspData[`audio${n}_hw_vrms`]);
+        addRow('Modulation (kHz):', inspData[`audio${n}_hw_mod`]);
+        addSubSection(`${tl} — SAME Level (CRS)`);
+        addRow('Level (dBm):', inspData[`audio${n}_crs_dbm`]);
+        addRow('Level (Vrms):', inspData[`audio${n}_crs_vrms`]);
+        addRow('Modulation (kHz):', inspData[`audio${n}_crs_mod`]);
+      });
+
+      // {9} Transmitter Transfer
+      addSection('{9} Transmitter Transfer Check');
+      addRow('Proper CRS Transfer:', inspData.transfer_crs);
+      addRow('Proper ACP Transfer:', inspData.transfer_acp);
+      if (inspData.final_tx) {
+        const finalLabel = txType === 'nautel'
+          ? (inspData.final_tx === '1' ? 'TX A' : 'TX B')
+          : `TX ${inspData.final_tx}`;
+        addRow('Final Broadcasting TX:', finalLabel);
+      }
+
+      // {11} Signal Strength (non-Nautel)
+      if (txType !== 'nautel') {
+        const hasSig = inspData.sig_ant || inspData.sig_height || inspData.sig_orient ||
+          [0,90,180,270].some(d => ['uvm','db','dist','lat','lng'].some(k => inspData[`sig_${d}_${k}`]));
+        if (hasSig) {
+          addSection('{11} Signal Strength');
+          addRow('Antenna Type:', inspData.sig_ant);
+          addRow('Height:', inspData.sig_height);
+          addRow('Orientation:', inspData.sig_orient);
+          [0, 90, 180, 270].forEach(deg => {
+            const hasDir = ['uvm','db','dist','lat','lng'].some(k => inspData[`sig_${deg}_${k}`]);
+            if (!hasDir) return;
+            addSubSection(`${deg}° Reading`);
+            addRow('μV/m:', inspData[`sig_${deg}_uvm`]);
+            addRow('dBμV/m:', inspData[`sig_${deg}_db`]);
+            addRow('Distance (mi):', inspData[`sig_${deg}_dist`]);
+            addRow('Latitude:', inspData[`sig_${deg}_lat`]);
+            addRow('Longitude:', inspData[`sig_${deg}_lng`]);
+          });
+        }
+      }
+
+      // Notes
+      if (inspData.notes) {
+        addSection('Notes');
+        checkPage(6);
+        doc.setFontSize(9.5);
+        doc.setTextColor(15, 23, 42);
+        const noteLines = doc.splitTextToSize(inspData.notes, pageW - 40);
+        doc.text(noteLines, 25, y);
+        y += 5.5 * noteLines.length;
+      }
+
+      // Footer on every page
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let pg = 1; pg <= totalPages; pg++) {
+        doc.setPage(pg);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(
+          `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}  |  Page ${pg} of ${totalPages}`,
+          pageW / 2, pageH - 10, { align: 'center' }
+        );
+        doc.text('National Weather Service — Electronics Maintenance', pageW / 2, pageH - 6, { align: 'center' });
+      }
+
+      const filename = `NWR_Inspection_${inspData.siteId || 'UNKNOWN'}_${inspData.date || new Date().toLocaleDateString('en-CA')}.pdf`;
+      doc.save(filename);
+    };
+
+    const InspectionForm = ({ user, editDoc, clearEdit }) => {
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
       const [is1KW, setIs1KW] = useState(false);
       const [activeTx, setActiveTx] = useState('tx1');
       const [saving, setSaving] = useState(false);
+      const [draftSaving, setDraftSaving] = useState(false);
       const [data, setData] = useState({});
+      const [docId, setDocId] = useState(null);
+      const [draft, setDraft] = useState(null);
 
       const set = (f, v) => setData(p => ({ ...p, [f]: v }));
       const site = SITES.find(s => s.id === data.siteId);
@@ -708,6 +1002,37 @@
         </div>
       );
 
+      const initFromData = (d) => {
+        setData(d);
+        if (d.txType) setTxType(d.txType);
+        if (d.isClassic !== undefined) setIsClassic(d.isClassic);
+        if (d.is1KW !== undefined) setIs1KW(d.is1KW);
+        setActiveTx(d.txType === 'nautel' ? 'txa' : 'tx1');
+      };
+
+      useEffect(() => {
+        if (!editDoc) return;
+        initFromData(editDoc.data);
+        setDocId(editDoc.id);
+        clearEdit();
+      }, [editDoc]);
+
+      useEffect(() => {
+        db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections')
+          .where('status', '==', 'draft')
+          .orderBy('timestamp', 'desc')
+          .limit(1)
+          .get()
+          .then(snap => {
+            if (!snap.empty) {
+              const d = snap.docs[0];
+              setDraft({ id: d.id, data: d.data() });
+            }
+          })
+          .catch(() => {});
+      }, []);
+
       const handleSiteChange = (id) => {
         const s = SITES.find(x => x.id === id);
         set('siteId', id);
@@ -719,167 +1044,62 @@
         }
       };
 
+      const resumeDraft = () => {
+        initFromData(draft.data);
+        setDocId(draft.id);
+        setDraft(null);
+      };
+
+      const discardDraft = () => {
+        if (draft?.id) {
+          db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('inspections').doc(draft.id).delete().catch(() => {});
+        }
+        setDraft(null);
+      };
+
+      const handleSaveDraft = async () => {
+        if (!data.siteId) return;
+        setDraftSaving(true);
+        try {
+          const payload = {
+            ...data, txType, isClassic, is1KW, status: 'draft',
+            siteName: site?.name, siteCall: site?.call,
+            timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
+          };
+          if (docId) {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').doc(docId).set(payload);
+          } else {
+            const ref = db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').doc();
+            await ref.set(payload);
+            setDocId(ref.id);
+          }
+          alert('Draft saved!');
+        } catch (e) { alert('Error saving draft: ' + e.message); }
+        setDraftSaving(false);
+      };
+
       const save = async () => {
         setSaving(true);
         try {
-          await db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('inspections').add({
-              ...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call,
-              timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
-            });
+          const payload = {
+            ...data, txType, isClassic, is1KW, status: 'completed',
+            siteName: site?.name, siteCall: site?.call,
+            timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
+          };
+          if (docId) {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').doc(docId).set(payload);
+          } else {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data')
+              .collection('inspections').add(payload);
+          }
           alert('✓ Saved!');
-          setStep(1); setData({}); setTxType(null);
+          setStep(1); setData({}); setTxType(null); setDocId(null); setDraft(null); setActiveTx('tx1');
         } catch (e) { alert('Error: ' + e.message); }
         setSaving(false);
-      };
-
-      const exportToPDF = () => {
-        if (!data.siteId || !data.date) {
-          alert('Please complete at least Site and Date fields before exporting');
-          return;
-        }
-
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.getWidth();
-        let yPos = 20;
-
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(14, 165, 233); // noaa-sky color
-        doc.text('NOAA Weather Radio Inspection Report', pageWidth / 2, yPos, { align: 'center' });
-        yPos += 8;
-        doc.setFontSize(11);
-        doc.setTextColor(100, 116, 139);
-        doc.text('EWX-NWR Compliance Inspection', pageWidth / 2, yPos, { align: 'center' });
-        yPos += 15;
-
-        // Site Information
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text('Site Information', 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        const siteInfo = [
-          ['Site:', site?.name || 'N/A'],
-          ['Call Sign:', site?.call || 'N/A'],
-          ['Frequency:', site?.freq || 'N/A'],
-          ['Transmitter:', site?.tx || 'N/A'],
-          ['Date:', data.date || 'N/A'],
-          ['Technician:', data.tech || 'N/A']
-        ];
-        siteInfo.forEach(([label, value]) => {
-          doc.setTextColor(100, 116, 139);
-          doc.text(label, 25, yPos);
-          doc.setTextColor(0, 0, 0);
-          doc.text(value, 60, yPos);
-          yPos += 6;
-        });
-        yPos += 10;
-
-        // Transmitter 1 Measurements
-        const tx1Label = txType === 'nautel' ? 'TX A' : 'TX 1';
-        const tx2Label = txType === 'nautel' ? 'TX B' : 'TX 2';
-        const tx1Prefix = txType === 'nautel' ? 'txa' : p;
-        const tx2Prefix = txType === 'nautel' ? 'txb' : 'tx2';
-
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text(`${tx1Label} Measurements`, 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-
-        const tx1Rows = [
-          [`Carrier Freq (Initial):`, (data.freq_init_1 || 'N/A') + ' MHz'],
-          [`Carrier Freq (Final):`,   (data.freq_final_1 || 'N/A') + ' MHz'],
-          [`Alert Tone Modulation:`,  (data.audio1_alert_mod || 'N/A') + ' kHz'],
-          [`SAME Modulation (H/W):`,  (data.audio1_hw_mod || 'N/A') + ' kHz'],
-          [`SAME Modulation (CRS):`,  (data.audio1_crs_mod || 'N/A') + ' kHz'],
-          [`Forward Power:`,          (data[`${tx1Prefix}_ext_fwd`] || 'N/A') + ' W'],
-          [`Reflected Power:`,        (data[`${tx1Prefix}_ext_refl`] || 'N/A') + ' W'],
-        ];
-        tx1Rows.forEach(([label, value]) => {
-          doc.setTextColor(100, 116, 139); doc.text(label, 25, yPos);
-          doc.setTextColor(0, 0, 0); doc.text(value, 95, yPos);
-          yPos += 6;
-        });
-        yPos += 6;
-
-        // Transmitter 2 (if not Classic Armstrong)
-        if (!isClassic || txType !== 'armstrong') {
-          if (yPos > 250) { doc.addPage(); yPos = 20; }
-          doc.setFontSize(12);
-          doc.setTextColor(14, 165, 233);
-          doc.text(`${tx2Label} Measurements`, 20, yPos);
-          yPos += 8;
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-
-          const tx2Rows = [
-            [`Carrier Freq (Initial):`, (data.freq_init_2 || 'N/A') + ' MHz'],
-            [`Carrier Freq (Final):`,   (data.freq_final_2 || 'N/A') + ' MHz'],
-            [`Alert Tone Modulation:`,  (data.audio2_alert_mod || 'N/A') + ' kHz'],
-            [`SAME Modulation (H/W):`,  (data.audio2_hw_mod || 'N/A') + ' kHz'],
-            [`SAME Modulation (CRS):`,  (data.audio2_crs_mod || 'N/A') + ' kHz'],
-            [`Forward Power:`,          (data[`${tx2Prefix}_ext_fwd`] || 'N/A') + ' W'],
-            [`Reflected Power:`,        (data[`${tx2Prefix}_ext_refl`] || 'N/A') + ' W'],
-          ];
-          tx2Rows.forEach(([label, value]) => {
-            doc.setTextColor(100, 116, 139); doc.text(label, 25, yPos);
-            doc.setTextColor(0, 0, 0); doc.text(value, 95, yPos);
-            yPos += 6;
-          });
-          yPos += 6;
-        }
-
-        // Visual Inspection Checklist
-        if (yPos > 250) {
-          doc.addPage();
-          yPos = 20;
-        }
-        doc.setFontSize(12);
-        doc.setTextColor(14, 165, 233);
-        doc.text('Visual Inspection Checklist', 20, yPos);
-        yPos += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        
-        const checklist = [
-          ['Filters Replaced:', data.filters || 'N/A'],
-          ['Visual Comments:', data.visualComments || 'N/A'],
-          ['Defective Fans:', data.defectiveFans || 'None'],
-          ['AC Input TX1:', (data.ac1 || 'N/A') + ' V'],
-          ['AC Input TX2:', (data.ac2 || 'N/A') + ' V'],
-          ['Surge Protector OK:', data.surgeOk || 'N/A'],
-          ['ROAMS Battery Date:', data.roamsDate || 'N/A']
-        ];
-        
-        checklist.forEach(([label, value]) => {
-          if (yPos > 270) {
-            doc.addPage();
-            yPos = 20;
-          }
-          doc.setTextColor(100, 116, 139);
-          doc.text(label, 25, yPos);
-          doc.setTextColor(0, 0, 0);
-          const lines = doc.splitTextToSize(value.toString(), pageWidth - 80);
-          doc.text(lines, 80, yPos);
-          yPos += 6 * lines.length + 2;
-        });
-
-        // Footer
-        yPos = doc.internal.pageSize.getHeight() - 15;
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth / 2, yPos, { align: 'center' });
-        yPos += 4;
-        doc.text('National Weather Service - Electronics Maintenance', pageWidth / 2, yPos, { align: 'center' });
-
-        // Save PDF
-        const filename = `NWR_Inspection_${site?.id || 'UNKNOWN'}_${data.date || new Date().toISOString().split('T')[0]}.pdf`;
-        doc.save(filename);
       };
 
       const txLabel = (n) => txType === 'nautel' ? (n === 1 ? 'TX A' : 'TX B') : (n === 1 ? 'TX 1' : 'TX 2');
@@ -893,6 +1113,22 @@
       // Step 1: Site
       const Step1 = () => (
         <div className="space-y-4 animate-in">
+          {draft && !docId && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+              <p className="text-amber-400 font-semibold text-sm">Unsaved Draft Found</p>
+              <p className="text-slate-400 text-xs mt-1">{draft.data.siteName || draft.data.siteId || 'Unknown site'} · {draft.data.date || 'no date'}</p>
+              <div className="flex gap-2 mt-3">
+                <button onClick={resumeDraft} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs font-semibold transition-colors">Resume Draft</button>
+                <button onClick={discardDraft} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors">Discard</button>
+              </div>
+            </div>
+          )}
+          {docId && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2">
+              <Icon name="Pencil" className="w-4 h-4 text-emerald-400" />
+              <span className="text-emerald-400 text-sm font-medium">Editing saved inspection — Submit to update record</span>
+            </div>
+          )}
           <div className="text-center mb-4">
             <h2 className="text-xl font-bold text-white">Select Transmitter Site</h2>
           </div>
@@ -1320,9 +1556,15 @@
             <div className="p-6 min-h-[65vh] max-h-[75vh] overflow-y-auto">{renderStep()}</div>
             <div className="p-5 border-t border-slate-700/50 bg-slate-900/50 flex justify-between items-center">
               {step > 1 ? <button onClick={() => setStep(step - 1)} className="px-5 py-2 rounded-xl bg-slate-700 text-white font-medium">← Back</button> : <div />}
-              <div className="flex gap-3">
+              <div className="flex gap-2 flex-wrap justify-end">
+                <button onClick={handleSaveDraft} disabled={draftSaving || !data.siteId}
+                  className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium text-sm disabled:opacity-40 flex items-center gap-2 transition-colors">
+                  <Icon name="Save" className="w-4 h-4" />
+                  {draftSaving ? 'Saving...' : 'Save Draft'}
+                </button>
                 {step === 7 && (
-                  <button onClick={exportToPDF} className="px-5 py-2 rounded-xl bg-blue-600 text-white font-medium flex items-center gap-2">
+                  <button onClick={() => exportInspectionToPDF({...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call})}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-2 transition-colors">
                     <Icon name="FileDown" className="w-4 h-4" />
                     Export PDF
                   </button>
@@ -1331,7 +1573,7 @@
                   <button onClick={() => setStep(step + 1)} disabled={!data.siteId} className="px-5 py-2 rounded-xl bg-noaa-light text-white font-medium disabled:opacity-50">Next →</button>
                 ) : (
                   <button onClick={save} disabled={saving || !data.siteId} className="px-6 py-2 rounded-xl bg-emerald-500 text-white font-semibold disabled:opacity-50">
-                    {saving ? 'Saving...' : '✓ Submit'}
+                    {saving ? 'Saving...' : (docId ? '✓ Update' : '✓ Submit')}
                   </button>
                 )}
               </div>
@@ -1884,9 +2126,12 @@
           setReasons(d.reasons || {});
         });
       }, []);
+      const siteStatusRef = db.collection('artifacts').doc(appId).collection('public').doc('site_status');
+      const lastUpdatedRef = db.collection('artifacts').doc(appId).collection('public').doc('last_updated');
       const saveStatus = (newStatuses, newReasons) => {
-        db.collection('artifacts').doc(appId).collection('public').doc('site_status').set({ statuses: newStatuses, reasons: newReasons }).catch(err => console.error('site_status write failed:', err));
-        db.collection('artifacts').doc(appId).collection('public').doc('last_updated').set({ ts: new Date().toISOString() });
+        siteStatusRef.set({ statuses: newStatuses, reasons: newReasons })
+          .catch(err => console.error('site_status write failed:', err));
+        lastUpdatedRef.set({ ts: new Date().toISOString() });
       };
       const handleStatusChange = (id, value) => {
         if (value === 'ONLINE') {
@@ -2435,13 +2680,102 @@
       );
     };
 
+    // Completed Inspections List
+    const InspectionsList = ({ onEdit }) => {
+      const [inspections, setInspections] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('data')
+          .collection('inspections')
+          .orderBy('timestamp', 'desc')
+          .onSnapshot(snap => {
+            const all = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+              .filter(d => d.status !== 'draft');
+            setInspections(all);
+            setLoading(false);
+          }, err => { console.error(err); setLoading(false); });
+      }, []);
+
+      const deleteInspection = (id) => {
+        if (confirm('Delete this inspection record? This cannot be undone.')) {
+          db.collection('artifacts').doc(appId).collection('public').doc('data')
+            .collection('inspections').doc(id).delete();
+        }
+      };
+
+      if (loading) return (
+        <div className="flex justify-center py-8">
+          <Icon name="Loader2" className="w-6 h-6 text-noaa-sky animate-spin" />
+        </div>
+      );
+
+      return (
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-noaa-blue to-slate-900 p-5 border-b border-slate-700/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-noaa-sky/20 flex items-center justify-center">
+                <Icon name="ClipboardCheck" className="w-5 h-5 text-noaa-sky" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white">Completed Inspections</h3>
+                <p className="text-xs text-slate-400">{inspections.length} record{inspections.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          </div>
+          {inspections.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No completed inspections yet.</div>
+          ) : (
+            <div className="divide-y divide-slate-700/50">
+              {inspections.map(insp => (
+                <div key={insp.id} className="p-4 hover:bg-slate-700/20 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-white">{insp.siteName || insp.siteId}</span>
+                        <span className="text-xs font-mono text-slate-400">{insp.siteCall}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          insp.txType === 'nautel' ? 'bg-purple-500/20 text-purple-400' :
+                          insp.txType === 'crown' ? 'bg-teal-500/20 text-teal-400' :
+                          'bg-blue-500/20 text-blue-400'
+                        }`}>{insp.txType || 'unknown'}</span>
+                      </div>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {insp.date}{insp.tech ? ` · ${insp.tech}` : ''}
+                        {insp.timestamp && <span className="text-slate-600 text-xs ml-2">{new Date(insp.timestamp).toLocaleString()}</span>}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => exportInspectionToPDF(insp)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-xs font-medium flex items-center gap-1.5 transition-colors">
+                        <Icon name="FileDown" className="w-3 h-3" /> PDF
+                      </button>
+                      <button onClick={() => onEdit({ id: insp.id, data: insp })}
+                        className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium flex items-center gap-1.5 transition-colors">
+                        <Icon name="Pencil" className="w-3 h-3" /> Edit
+                      </button>
+                      <button onClick={() => deleteInspection(insp.id)}
+                        className="p-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors">
+                        <Icon name="Trash2" className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     // History Tab - full-width maintenance log view
-    const HistoryTab = () => (
-      <div className="space-y-4 animate-in">
+    const HistoryTab = ({ onEdit }) => (
+      <div className="space-y-6 animate-in">
         <div className="flex items-center gap-2 mb-2">
           <Icon name="History" className="w-5 h-5 text-noaa-sky" />
           <h2 className="text-xl font-bold text-white">Maintenance History</h2>
         </div>
+        <InspectionsList onEdit={onEdit} />
         <MaintenanceLog />
       </div>
     );
@@ -2700,6 +3034,7 @@
       const [user, setUser] = useState(null);
       const [loading, setLoading] = useState(true);
       const [tab, setTab] = useState('dashboard');
+      const [editDoc, setEditDoc] = useState(null);
 
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
@@ -2896,8 +3231,8 @@
           </header>
           <main className="max-w-7xl mx-auto px-4 py-6">
             {tab === 'dashboard' && <Dashboard setTab={setTab} />}
-            {tab === 'forms' && <InspectionForm user={user} />}
-            {tab === 'history' && <HistoryTab />}
+            {tab === 'forms' && <InspectionForm user={user} editDoc={editDoc} clearEdit={() => setEditDoc(null)} />}
+            {tab === 'history' && <HistoryTab onEdit={doc => { setEditDoc(doc); setTab('forms'); }} />}
             {tab === 'schedule' && <ScheduleTab />}
             {tab === 'analytics' && <Analytics />}
             {tab === 'sites' && <SitesList />}
