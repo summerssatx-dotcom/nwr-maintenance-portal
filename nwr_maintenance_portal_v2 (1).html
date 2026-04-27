@@ -2684,7 +2684,7 @@
     const InspectionsList = ({ onEdit }) => {
       const [inspections, setInspections] = useState([]);
       const [loading, setLoading] = useState(true);
-      const [siteFilter, setSiteFilter] = useState('all');
+      const [siteFilter, setSiteFilter] = useState('');
 
       useEffect(() => {
         return db.collection('artifacts').doc(appId).collection('public').doc('data')
@@ -2705,7 +2705,8 @@
         }
       };
 
-      const filtered = siteFilter === 'all' ? inspections : inspections.filter(i => i.siteId === siteFilter);
+      const filtered = siteFilter ? inspections.filter(i => i.siteId === siteFilter) : [];
+      const selectedSite = SITES.find(s => s.id === siteFilter);
 
       if (loading) return (
         <div className="flex justify-center py-8">
@@ -2723,7 +2724,9 @@
                 </div>
                 <div>
                   <h3 className="font-bold text-white">Completed Inspections</h3>
-                  <p className="text-xs text-slate-400">{filtered.length}{siteFilter !== 'all' ? ` of ${inspections.length}` : ''} record{inspections.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-slate-400">
+                    {siteFilter ? `${filtered.length} record${filtered.length !== 1 ? 's' : ''} · ${selectedSite?.name || siteFilter}` : 'Select a site to view records'}
+                  </p>
                 </div>
               </div>
               <select
@@ -2731,7 +2734,7 @@
                 onChange={e => setSiteFilter(e.target.value)}
                 className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-noaa-sky"
               >
-                <option value="all">All Sites</option>
+                <option value="">— Select a Site —</option>
                 {SITES.map(s => (
                   <option key={s.id} value={s.id}>
                     {s.name} — {s.call} ({inspections.filter(i => i.siteId === s.id).length})
@@ -2740,10 +2743,13 @@
               </select>
             </div>
           </div>
-          {filtered.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              {siteFilter === 'all' ? 'No completed inspections yet.' : 'No inspections for the selected site.'}
+          {!siteFilter ? (
+            <div className="p-8 text-center text-slate-500 flex flex-col items-center gap-2">
+              <Icon name="MousePointerClick" className="w-6 h-6 text-slate-600" />
+              <span>Select a site from the dropdown to view its inspections.</span>
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No completed inspections for this site.</div>
           ) : (
             <div className="divide-y divide-slate-700/50">
               {filtered.map(insp => (
