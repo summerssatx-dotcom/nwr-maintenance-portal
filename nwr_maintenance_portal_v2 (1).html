@@ -2705,11 +2705,7 @@
         }
       };
 
-      const uniqueSites = [...new Map(
-        inspections.map(i => [i.siteId || i.siteName, { id: i.siteId || i.siteName, name: i.siteName || i.siteId, call: i.siteCall }])
-      ).values()].filter(s => s.id).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-      const filtered = siteFilter === 'all' ? inspections : inspections.filter(i => (i.siteId || i.siteName) === siteFilter);
+      const filtered = siteFilter === 'all' ? inspections : inspections.filter(i => i.siteId === siteFilter);
 
       if (loading) return (
         <div className="flex justify-center py-8">
@@ -2730,20 +2726,18 @@
                   <p className="text-xs text-slate-400">{filtered.length}{siteFilter !== 'all' ? ` of ${inspections.length}` : ''} record{inspections.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
-              {uniqueSites.length > 1 && (
-                <select
-                  value={siteFilter}
-                  onChange={e => setSiteFilter(e.target.value)}
-                  className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-noaa-sky"
-                >
-                  <option value="all">All Sites ({inspections.length})</option>
-                  {uniqueSites.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}{s.call ? ` — ${s.call}` : ''} ({inspections.filter(i => (i.siteId || i.siteName) === s.id).length})
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                value={siteFilter}
+                onChange={e => setSiteFilter(e.target.value)}
+                className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-noaa-sky"
+              >
+                <option value="all">All Sites ({inspections.length})</option>
+                {SITES.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — {s.call} ({inspections.filter(i => i.siteId === s.id).length})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {filtered.length === 0 ? (
