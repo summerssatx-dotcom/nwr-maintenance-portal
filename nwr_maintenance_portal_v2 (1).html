@@ -3057,16 +3057,8 @@
     // Resources Tab — defined outside App so React doesn't treat it as a new type on every App render
     const ResourcesTab = () => {
       const [open, setOpen] = React.useState(null);
-      const BLOB = 'https://github.com/summerssatx-dotcom/nwr-maintenance-portal/blob/main/resources/';
-      const RAW  = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
-      // PDFs \u2192 GitHub native blob viewer (handles large files up to 25 MB inline)
-      // .docx \u2192 Google Docs Viewer (GitHub cannot render Office files inline)
-      const view = (path) => {
-        const encoded = path.split('/').map(s => encodeURIComponent(s)).join('/');
-        return path.toLowerCase().endsWith('.docx')
-          ? `https://docs.google.com/viewer?url=${encodeURIComponent(RAW + path)}`
-          : BLOB + encoded;
-      };
+      const RAW = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
+      const view = (path) => `https://docs.google.com/viewer?url=${encodeURIComponent(RAW + path)}`;
         const ac = 'ARMSTRONG CLASSIC/';
         const ag = 'ARMSTRONG G1000B/';
         const cr = 'CROWN/';
