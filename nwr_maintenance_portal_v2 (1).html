@@ -3057,12 +3057,20 @@
     // Resources Tab — defined outside App so React doesn't treat it as a new type on every App render
     const ResourcesTab = () => {
       const [open, setOpen] = React.useState(null);
-      const RAW = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
-      const view = (url) => `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
-        const ac = RAW + 'ARMSTRONG CLASSIC/';
-        const ag = RAW + 'ARMSTRONG G1000B/';
-        const cr = RAW + 'CROWN/';
-        const na = RAW + 'NAUTEL/';
+      const BLOB = 'https://github.com/summerssatx-dotcom/nwr-maintenance-portal/blob/main/resources/';
+      const RAW  = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
+      // PDFs \u2192 GitHub native blob viewer (handles large files up to 25 MB inline)
+      // .docx \u2192 Google Docs Viewer (GitHub cannot render Office files inline)
+      const view = (path) => {
+        const encoded = path.split('/').map(s => encodeURIComponent(s)).join('/');
+        return path.toLowerCase().endsWith('.docx')
+          ? `https://docs.google.com/viewer?url=${encodeURIComponent(RAW + path)}`
+          : BLOB + encoded;
+      };
+        const ac = 'ARMSTRONG CLASSIC/';
+        const ag = 'ARMSTRONG G1000B/';
+        const cr = 'CROWN/';
+        const na = 'NAUTEL/';
         const cards = [
           {
             id: 'nautel', label: 'Nautel',
@@ -3093,9 +3101,9 @@
                 title: 'Classic',
                 files: [
                   { name: 'Armstrong Classic Manual', url: view(ac + 'Armstrong Classic - MANUAL.pdf'), manual: true },
-                  { name: 'Amplifier Alignments', url: view(ac + 'Amplifier Alignments.pdf') },
-                  { name: 'Principles of Operation', url: view(ac + 'Principles of Operation.pdf') },
-                  { name: 'Course Handouts', url: view(ac + 'Course Handouts.pdf') },
+                  { name: 'Amplifier Alignments', url: view(ac + 'Armstrong Classic - Amplifier Alignments.pdf') },
+                  { name: 'Principles of Operation', url: view(ac + 'Armstrong Classic - Principles of Operation.pdf') },
+                  { name: 'Course Handouts', url: view(ac + 'Armstrong Classic Course Handouts.pdf') },
                   { name: 'Classic Parts Identifier', url: view(ac + 'ARMSTRONG CLASSIC PARTS IDENTIFIER.pdf') },
                   { name: 'Sending Tones to Transmitters', url: view(ac + 'Sending Tones to Transmitters.pdf') },
                 ]
@@ -3104,7 +3112,7 @@
                 title: 'G1000B',
                 files: [
                   { name: 'Armstrong G1000B Manual', url: view(ag + 'Armstrong G1000B - MANUAL.pdf'), manual: true },
-                  { name: 'Course Handouts', url: view(ag + 'Course Handouts.pdf') },
+                  { name: 'Course Handouts', url: view(ag + 'Armstrong G1000B Course Handouts.pdf') },
                   { name: 'G1000B Parts Identifier', url: view(ag + 'ARMSTRONG G1000B PARTS IDENTIFIER.pdf') },
                   { name: 'BMH Test Tones', url: view(ag + 'BMH Test Tones.pdf') },
                   { name: 'Sending Tones to Transmitters', url: view(ag + 'Sending Tones to Transmitters.docx') },
