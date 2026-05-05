@@ -3058,10 +3058,7 @@
     const ResourcesTab = () => {
       const [open, setOpen] = React.useState(null);
       const RAW = 'https://raw.githubusercontent.com/summerssatx-dotcom/nwr-maintenance-portal/main/resources/';
-      // PDFs open natively in the browser; .docx files fall back to Google Docs Viewer
-      const view = (url) => url.toLowerCase().includes('.docx')
-        ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`
-        : url;
+      const view = (url) => `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
         const ac = RAW + 'ARMSTRONG%20CLASSIC/';
         const ag = RAW + 'ARMSTRONG%20G1000B/';
         const cr = RAW + 'CROWN/';
