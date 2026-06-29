@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NWR Maintenance Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -27,7 +30,20 @@
     }
   </script>
   <style>
-    body { font-family: 'Inter', system-ui, sans-serif; }
+    /* Crisp text rendering across the whole app */
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      letter-spacing: -0.006em;
+    }
+    /* Tighter tracking on headings/bold text reads sharper and more refined */
+    h1, h2, h3, h4, .font-bold, .font-semibold { letter-spacing: -0.014em; }
+    /* Even, aligned digits in data tables and inputs */
+    .font-mono, input, table, td, th { font-variant-numeric: tabular-nums; }
     .animate-in { animation: animateIn 0.3s ease-out; }
     @keyframes animateIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .classic-field { border-left: 3px solid #f59e0b !important; }
@@ -2080,7 +2096,8 @@
           // Add tile layer (CartoDB Voyager - medium tones, darkened via CSS)
           L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
             attribution: '© OpenStreetMap contributors, © CARTO',
-            className: 'map-tiles-dark'
+            className: 'map-tiles-dark',
+            detectRetina: true
           }).addTo(map);
 
           // Custom marker icon
