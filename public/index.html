@@ -2727,7 +2727,7 @@
       const offlineCount = SITES.filter(s => getStatus(s.id) === 'OFFLINE').length;
       const degradedCount = SITES.filter(s => getStatus(s.id) === 'DEGRADED').length;
       const sitesExtra = offlineCount > 0
-        ? `${offlineCount} Offline`
+        ? `${offlineCount} INOP`
         : degradedCount > 0 ? `${degradedCount} Degraded` : null;
 
       const today = new Date().toLocaleDateString('en-CA');
