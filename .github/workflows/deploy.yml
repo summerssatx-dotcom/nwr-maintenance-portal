@@ -8,9 +8,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NWR_MAINTENANCE_V2 }}
-          channelId: live
-          projectId: nwr-maintenance-v2
+
+      - name: Write service account key
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NWR_MAINTENANCE_V2 }}
+        run: printf '%s' "$SA_JSON" > "${{ github.workspace }}/firebase-sa.json"
+
+      - name: Deploy to Firebase Hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/firebase-sa.json
+        run: |
+          set +e
+          OUT=$(npx firebase-tools@latest deploy --only hosting --project nwr-maintenance-v2 --non-interactive 2>&1)
+          CODE=$?
+          echo "$OUT"
+          if [ $CODE -eq 0 ]; then
+            echo "::notice::Firebase deploy succeeded."
+            exit 0
+          fi
+          # The Firebase CLI sometimes retries a release request after a transient
+          # "premature close" network blip. The first attempt has already gone
+          # through, so the retry returns 400 FAILED_PRECONDITION:
+          #   "... is the current active version."
+          # That means the new version IS live — treat it as success, not failure.
+          if echo "$OUT" | grep -q "is the current active version"; then
+            echo "::notice::Release already active (premature-close retry race) — new version is live. Treating as success."
+            exit 0
+          fi
+          echo "::error::Firebase deploy failed (exit code $CODE)."
+          exit $CODE
+
+      - name: Remove service account key
+        if: always()
+        run: rm -f "${{ github.workspace }}/firebase-sa.json"
