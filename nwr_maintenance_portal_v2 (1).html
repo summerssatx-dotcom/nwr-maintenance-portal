@@ -682,6 +682,489 @@
       );
     };
 
+    // ── Site Data Logs ────────────────────────────────────────────────
+    // Transmitter-specific maintenance data logs kept for trend analysis.
+    // Modeled after the paper NWS data-log sheets (Primary / Secondary columns).
+    // NOTE: These are Site Data Logs, NOT compliance Inspection Forms.
+    const DATA_LOG_TEMPLATES = [
+      {
+        id: 'armstrong_g1000', label: 'Armstrong G1000', color: 'blue',
+        title: 'NWS Maintenance Data Log — Armstrong G1000 Transmitters', idLabel: 'Call Sign',
+        sections: [
+          { title: 'Checks', fields: [
+            { k: 'corrective_action', label: 'Corrective Action', unit: 'Y/N' },
+            { k: 'clean_air_filters', label: 'Clean Air Filters', unit: 'Y/N' },
+            { k: 'visual_inspection', label: 'Visual Inspection', unit: 'Y/N' },
+          ]},
+          { title: 'Cavity Output', fields: [
+            { k: 'cavity_fwd', label: 'Forward Power', unit: 'W' },
+            { k: 'cavity_refl', label: 'Reflected Power', unit: 'W' },
+          ]},
+          { title: 'Combiner / Splitter', fields: [
+            { k: 'combiner_fwd', label: 'Forward Power', unit: 'W' },
+            { k: 'combiner_refl', label: 'Reflected Power', unit: 'W' },
+            { k: 'combiner_rej', label: 'Rejected Power', unit: 'W' },
+          ]},
+          { title: 'Exciter Output', fields: [
+            { k: 'exciter_fwd', label: 'Forward Power', unit: 'W' },
+            { k: 'exciter_refl', label: 'Reflected Power', unit: 'W' },
+          ]},
+          ...['1','2','3'].map(n => ({ title: `Power Amp #${n}`, fields: [
+            { k: `pa${n}_fwd`, label: 'Forward Power', unit: 'W' },
+            { k: `pa${n}_refl`, label: 'Reflected Power', unit: 'W' },
+            { k: `pa${n}_input`, label: 'Input Power', unit: 'W' },
+            { k: `pa${n}_vpa`, label: 'VPA', unit: 'V' },
+            { k: `pa${n}_ipa`, label: 'IPA', unit: 'A' },
+            { k: `pa${n}_eff`, label: 'Efficiency', unit: '%' },
+            { k: `pa${n}_temp`, label: 'Temperature', unit: '°' },
+            { k: `pa${n}_mains`, label: 'Mains', unit: 'V' },
+          ]})),
+          { title: 'Final Measurements', fields: [
+            { k: 'freq_error', label: 'Frequency Error', unit: '± Hz' },
+            { k: 'mod_dev', label: 'Modulation Deviation', unit: 'kHz' },
+            { k: 'ac_mains', label: 'A/C Mains', unit: 'VAC' },
+            { k: 'phone_audio', label: 'Phone Line Audio', unit: 'VRMS' },
+          ]},
+        ]
+      },
+      {
+        id: 'armstrong_g300b', label: 'Armstrong G300-G1000B', color: 'indigo',
+        title: 'NWS Maintenance Data Log — Armstrong G300-G1000B Transmitters', idLabel: 'Serial #',
+        sections: [
+          { title: 'Checks', fields: [
+            { k: 'corrective_action', label: 'Corrective Action', unit: 'Y/N' },
+            { k: 'clean_air_filters', label: 'Clean Air Filters', unit: 'Y/N' },
+            { k: 'visual_inspection', label: 'Visual Inspection', unit: 'Y/N' },
+          ]},
+          { title: 'Cavity Output', fields: [
+            { k: 'cavity_fwd', label: 'Forward Power', unit: 'W' },
+            { k: 'cavity_refl', label: 'Reflected Power', unit: 'W' },
+          ]},
+          { title: 'Transmitter', fields: [
+            { k: 'tx_fwd', label: 'Forward Power', unit: 'W' },
+            { k: 'tx_refl', label: 'Reflected Power', unit: 'W' },
+            { k: 'tx_vpa', label: 'VPA', unit: 'V' },
+            { k: 'tx_ipa', label: 'IPA', unit: 'A' },
+            { k: 'tx_eff', label: 'Efficiency', unit: '%' },
+            { k: 'tx_temp', label: 'Temperature', unit: '°' },
+          ]},
+          { title: 'Final Measurements', fields: [
+            { k: 'freq_error', label: 'Frequency Error', unit: '± Hz' },
+            { k: 'mod_dev', label: 'Modulation Deviation', unit: 'kHz' },
+            { k: 'ac_mains', label: 'A/C Mains', unit: 'VAC' },
+            { k: 'phone_audio', label: 'Phone Line Audio', unit: 'VRMS' },
+            { k: 'direct_connect', label: 'Direct Computer Connect', unit: 'Y/N' },
+            { k: 'remote_connect', label: 'Remote Computer Connect', unit: 'Y/N' },
+            { k: 'switches_correct', label: 'All Switches Correct Settings', unit: 'Y/N' },
+          ]},
+        ]
+      },
+      {
+        id: 'nautel_ng', label: 'Nautel NG300/1000', color: 'purple',
+        title: 'NWS Maintenance Data Log — Nautel NG300/1000 Transmitters', idLabel: 'Serial #',
+        sections: [
+          { title: 'Checks', fields: [
+            { k: 'corrective_action', label: 'Corrective Action', unit: 'Y/N' },
+            { k: 'clean_air_filters', label: 'Clean Air Filters', unit: 'Y/N' },
+            { k: 'visual_inspection', label: 'Visual Inspection', unit: 'Y/N' },
+            { k: 'check_hardware', label: 'Check Hardware', unit: 'Y/N' },
+            { k: 'check_leds', label: 'Check LEDs', unit: 'Y/N' },
+          ]},
+          { title: 'Power', fields: [
+            { k: 'fwd_power', label: 'Forward Power', unit: 'W' },
+            { k: 'refl_power', label: 'Reflected Power', unit: 'W' },
+            { k: 'vswr', label: 'VSWR', unit: '' },
+            { k: 'total_pa_current', label: 'Total PA Current', unit: 'A' },
+            { k: 'pa_voltage', label: 'PA Voltage', unit: 'V' },
+          ]},
+          { title: 'Power Amp Currents', fields: ['1','2','3','4','5','6','7','8'].map(n => (
+            { k: `pa${n}_current`, label: `Power Amp #${n} Current`, unit: 'A' }
+          )) },
+          { title: 'Final Measurements', fields: [
+            { k: 'intake_temp', label: 'Intake Temperature', unit: '° C/F' },
+            { k: 'phone_audio', label: 'Phone Line Audio', unit: 'VRMS' },
+            { k: 'audio_quality', label: 'Audio Quality Check', unit: 'Y/N' },
+            { k: 'mod_dev', label: 'Modulation Deviation', unit: 'kHz' },
+            { k: 'freq_error', label: 'Frequency Error', unit: '± Hz' },
+            { k: 'reset_freq', label: 'Reset Frequency', unit: 'Y/N' },
+            { k: 'reset_freq_to', label: 'Reset Frequency To', unit: '± Hz' },
+            { k: 'direct_connect', label: 'Direct Computer Connect', unit: 'Y/N' },
+            { k: 'remote_connect', label: 'Remote Computer Connect', unit: 'Y/N' },
+            { k: 'ac_mains', label: 'AC Mains', unit: 'VAC' },
+          ]},
+        ]
+      },
+      {
+        id: 'crown', label: 'Crown 100/300/1000', color: 'teal',
+        title: 'NWS Maintenance Data Log — Crown 100/300/1000 Transmitters', idLabel: 'Serial #',
+        sections: [
+          { title: 'WRG 100 / 300 / 1000', fields: [
+            { k: 'corrective_action', label: 'Corrective Action', unit: 'Y/N' },
+            { k: 'clean_air_filters', label: 'Clean Air Filters', unit: 'Y/N' },
+            { k: 'visual_inspection', label: 'Visual Inspection', unit: 'Y/N' },
+            { k: 'check_lamps', label: 'Check Lamps', unit: 'Y/N' },
+            { k: 'rf_power', label: 'RF Power', unit: 'W' },
+            { k: 'swr_combiner', label: 'SWR @ Combiner', unit: '' },
+            { k: 'alc', label: 'Automatic Level Control', unit: 'VDC' },
+            { k: 'pa_final_voltage', label: 'PA Final Voltage', unit: 'VDC' },
+            { k: 'pa_final_current', label: 'PA Final Current', unit: 'A' },
+            { k: 'pa_temp', label: 'PA Temperature', unit: '°C' },
+            { k: 'supply_volts', label: 'Supply Volts', unit: 'VDC' },
+            { k: 'antenna_swr', label: 'Antenna SWR', unit: '' },
+            { k: 'freq_error', label: 'Frequency Error', unit: '± Hz' },
+            { k: 'reset_freq', label: 'Reset Frequency?', unit: 'Y/N' },
+            { k: 'freq_reset_to', label: 'Frequency Reset To', unit: '± Hz' },
+            { k: 'mod_dev', label: 'Modulation Deviation', unit: 'kHz' },
+            { k: 'audio_quality', label: 'Audio Quality Check', unit: 'Y/N' },
+            { k: 'phone_audio', label: 'Phone Line Audio', unit: 'VRMS' },
+            { k: 'direct_rtc', label: 'Direct RTC Dial-up', unit: 'Y/N' },
+            { k: 'remote_rtc', label: 'Remote RTC Dial-up', unit: 'Y/N' },
+            { k: 'ac_mains', label: 'A/C Mains', unit: 'VAC' },
+          ]},
+          { title: 'WRG 1000 Only', fields: [
+            { k: 'input_ref_level', label: 'Input Reference Level', unit: 'VDC' },
+            { k: 'swr_combiner_1k', label: 'SWR @ Combiner', unit: '' },
+            { k: 'alc_1k', label: 'Automatic Level Control', unit: 'VDC' },
+            { k: 'power_out', label: 'Power Out', unit: 'kW' },
+            { k: 'pa_temp_1k', label: 'PA Temperature', unit: '°C' },
+            { k: 'pa_supply_voltage', label: 'PA Supply Voltage', unit: 'VDC' },
+            { k: 'pa_total_current', label: 'PA Total Current', unit: 'A' },
+            ...['1','2','3','4','5','6','7','8'].map(n => (
+              { k: `final_current_pa${n}`, label: `Final Current - PA${n}`, unit: 'A' }
+            )),
+          ]},
+        ]
+      },
+    ];
+
+    const DLOG_COLORS = {
+      blue:   { border: 'border-blue-500/40', head: 'bg-blue-900/40', text: 'text-blue-300', badge: 'bg-blue-700 text-blue-100', ring: 'focus:border-blue-400' },
+      indigo: { border: 'border-indigo-500/40', head: 'bg-indigo-900/40', text: 'text-indigo-300', badge: 'bg-indigo-700 text-indigo-100', ring: 'focus:border-indigo-400' },
+      purple: { border: 'border-purple-500/40', head: 'bg-purple-900/40', text: 'text-purple-300', badge: 'bg-purple-700 text-purple-100', ring: 'focus:border-purple-400' },
+      teal:   { border: 'border-teal-500/40', head: 'bg-teal-900/40', text: 'text-teal-300', badge: 'bg-teal-700 text-teal-100', ring: 'focus:border-teal-400' },
+    };
+
+    const exportDataLogToPDF = (log) => {
+      const tpl = DATA_LOG_TEMPLATES.find(t => t.id === log.templateId);
+      if (!tpl) return;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      let y = 18;
+      const v = log.values || {};
+      const checkPage = (h = 7) => { if (y + h > pageH - 16) { doc.addPage(); y = 18; drawColHeader(); } };
+
+      // Header
+      doc.setFontSize(13); doc.setTextColor(14, 165, 233); doc.setFont('helvetica', 'bold');
+      doc.text(tpl.title, pageW / 2, y, { align: 'center' });
+      y += 7;
+      doc.setFontSize(9.5); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+      doc.text('Site Data Log — Trend Analysis Record', pageW / 2, y, { align: 'center' });
+      y += 9;
+
+      doc.setFontSize(9.5); doc.setTextColor(15, 23, 42);
+      doc.text(`Location: ${log.siteName || log.siteId || ''}`, 20, y);
+      doc.text(`${tpl.idLabel}: ${log.idValue || log.siteCall || ''}`, pageW / 2, y);
+      y += 5.5;
+      doc.text(`Date: ${log.date || ''}`, 20, y);
+      if (log.tech) doc.text(`Technician: ${log.tech}`, pageW / 2, y);
+      y += 8;
+
+      const colLabel = 20, colP = 120, colS = 160;
+      const drawColHeader = () => {
+        doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'bold');
+        doc.text('TEST / ACTION', colLabel, y);
+        doc.text('Primary', colP, y);
+        doc.text('Secondary', colS, y);
+        doc.setFont('helvetica', 'normal');
+        y += 1.5;
+        doc.setDrawColor(203, 213, 225); doc.line(20, y, pageW - 20, y);
+        y += 4;
+      };
+      drawColHeader();
+
+      tpl.sections.forEach(section => {
+        checkPage(10);
+        doc.setFontSize(8.5); doc.setTextColor(14, 165, 233); doc.setFont('helvetica', 'bold');
+        doc.text((section.title || '').toUpperCase(), colLabel, y);
+        doc.setFont('helvetica', 'normal');
+        y += 5;
+        section.fields.forEach(f => {
+          checkPage(6);
+          doc.setFontSize(9); doc.setTextColor(71, 85, 105);
+          const lbl = f.unit ? `${f.label} (${f.unit})` : f.label;
+          doc.text(lbl, colLabel + 2, y);
+          doc.setTextColor(15, 23, 42);
+          doc.text(String(v[`${f.k}_p`] ?? '—'), colP, y);
+          doc.text(String(v[`${f.k}_s`] ?? '—'), colS, y);
+          y += 5.2;
+        });
+        y += 2;
+      });
+
+      if (log.notes) {
+        checkPage(12);
+        doc.setFontSize(8.5); doc.setTextColor(14, 165, 233); doc.setFont('helvetica', 'bold');
+        doc.text('NOTES', colLabel, y); doc.setFont('helvetica', 'normal'); y += 5;
+        doc.setFontSize(9); doc.setTextColor(15, 23, 42);
+        const noteLines = doc.splitTextToSize(log.notes, pageW - 40);
+        doc.text(noteLines, colLabel + 2, y); y += 5.2 * noteLines.length;
+      }
+
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let pg = 1; pg <= totalPages; pg++) {
+        doc.setPage(pg);
+        doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
+        doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}  |  Page ${pg} of ${totalPages}`, pageW / 2, pageH - 9, { align: 'center' });
+        doc.text('National Weather Service — Electronics Maintenance (Site Data Log)', pageW / 2, pageH - 5, { align: 'center' });
+      }
+      doc.save(`NWR_DataLog_${tpl.label.replace(/[^A-Za-z0-9]+/g, '')}_${log.siteId || 'SITE'}_${log.date || ''}.pdf`);
+    };
+
+    // Site Data Logs — interactive transmitter logs, kept under the History tab
+    const SiteDataLogs = () => {
+      const [logs, setLogs] = useState([]);
+      const [activeTemplate, setActiveTemplate] = useState(null);
+      const [siteId, setSiteId] = useState('');
+      const [idValue, setIdValue] = useState('');
+      const [date, setDate] = useState('');
+      const [tech, setTech] = useState('');
+      const [values, setValues] = useState({});
+      const [notes, setNotes] = useState('');
+      const [saving, setSaving] = useState(false);
+      const [filterType, setFilterType] = useState('');
+      const [expanded, setExpanded] = useState(null);
+
+      useEffect(() => {
+        return db.collection('site_data_logs').orderBy('timestamp', 'desc').onSnapshot(
+          snap => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+          err => console.error('Site data logs error:', err)
+        );
+      }, []);
+
+      const tpl = DATA_LOG_TEMPLATES.find(t => t.id === activeTemplate);
+      const C = tpl ? DLOG_COLORS[tpl.color] : DLOG_COLORS.blue;
+
+      const openForm = (id) => {
+        setActiveTemplate(id);
+        setSiteId(''); setIdValue(''); setNotes(''); setValues({}); setTech('');
+        setDate(new Date().toISOString().split('T')[0]);
+      };
+      const setVal = (k, val) => setValues(prev => ({ ...prev, [k]: val }));
+
+      const onSiteChange = (id) => {
+        setSiteId(id);
+        const s = SITES.find(x => x.id === id);
+        if (s && tpl && tpl.idLabel === 'Call Sign') setIdValue(s.call || '');
+      };
+
+      const save = async () => {
+        if (!siteId || !date) { alert('Select a site and date before saving.'); return; }
+        setSaving(true);
+        const site = SITES.find(s => s.id === siteId);
+        try {
+          await db.collection('site_data_logs').add({
+            templateId: tpl.id, templateLabel: tpl.label,
+            siteId, siteName: site?.name || siteId, siteCall: site?.call || '',
+            idValue, date, tech, values, notes,
+            timestamp: new Date().toISOString(),
+          });
+          db.collection('artifacts').doc(appId).collection('public').doc('last_updated').set({ ts: new Date().toISOString() });
+          setActiveTemplate(null);
+        } catch (e) { console.error(e); alert('Failed to save data log: ' + e.message); }
+        setSaving(false);
+      };
+
+      const deleteLog = (id) => {
+        if (confirm('Delete this data log? This cannot be undone.')) db.collection('site_data_logs').doc(id).delete();
+      };
+
+      const filtered = filterType ? logs.filter(l => l.templateId === filterType) : logs;
+
+      return (
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-slate-700 to-slate-900 p-5 border-b border-slate-700/50">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-lg bg-slate-600/50 flex items-center justify-center">
+                <Icon name="LineChart" className="w-5 h-5 text-slate-300" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Site Data Logs</h2>
+                <p className="text-xs text-slate-400">Transmitter readings recorded for trend analysis — separate from Inspection Forms.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {DATA_LOG_TEMPLATES.map(t => {
+                const tc = DLOG_COLORS[t.color];
+                return (
+                  <button key={t.id} onClick={() => openForm(t.id)}
+                    className={`p-3 rounded-xl border ${tc.border} ${tc.head} hover:brightness-125 transition-all text-left`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${tc.text}`}>New Log</span>
+                    <p className="text-sm font-bold text-white leading-tight mt-0.5">{t.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* History list */}
+          <div className="p-4">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recorded Logs ({filtered.length})</p>
+              <select value={filterType} onChange={e => setFilterType(e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-1.5 outline-none focus:border-noaa-sky">
+                <option value="">All Transmitter Types</option>
+                {DATA_LOG_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                <Icon name="LineChart" className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No data logs recorded yet.</p>
+                <p className="text-xs text-slate-600 mt-1">Pick a transmitter type above to record one.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map(log => {
+                  const lc = DLOG_COLORS[(DATA_LOG_TEMPLATES.find(t => t.id === log.templateId) || {}).color] || DLOG_COLORS.blue;
+                  const ltpl = DATA_LOG_TEMPLATES.find(t => t.id === log.templateId);
+                  const isOpen = expanded === log.id;
+                  return (
+                    <div key={log.id} className="bg-slate-900/40 border border-slate-700/40 rounded-xl overflow-hidden">
+                      <div className="p-3 flex items-center justify-between gap-3">
+                        <button onClick={() => setExpanded(isOpen ? null : log.id)} className="flex items-center gap-3 min-w-0 text-left flex-1">
+                          <Icon name={isOpen ? 'ChevronDown' : 'ChevronRight'} className="w-4 h-4 text-slate-500 shrink-0" />
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${lc.badge} shrink-0`}>{log.templateLabel}</span>
+                          <span className="text-white text-sm font-semibold truncate">{log.siteName}</span>
+                          <span className="text-slate-500 text-xs font-mono hidden sm:inline">{log.siteCall}</span>
+                          <span className="text-slate-400 text-xs ml-auto shrink-0">{log.date}</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => exportDataLogToPDF(log)} title="Export PDF"
+                            className="p-1.5 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition-colors">
+                            <Icon name="FileDown" className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteLog(log.id)} title="Delete"
+                            className="p-1.5 rounded-lg bg-slate-700 hover:bg-red-500/30 text-slate-400 hover:text-red-400 transition-colors">
+                            <Icon name="Trash2" className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {isOpen && ltpl && (
+                        <div className="px-4 pb-4 border-t border-slate-700/40">
+                          {log.tech && <p className="text-xs text-slate-400 mt-3">Technician: <span className="text-slate-200">{log.tech}</span></p>}
+                          {ltpl.sections.map((section, si) => (
+                            <div key={si} className="mt-3">
+                              <p className={`text-[10px] font-bold uppercase tracking-widest ${lc.text} mb-1`}>{section.title}</p>
+                              <div className="space-y-0.5">
+                                {section.fields.map(f => {
+                                  const p = (log.values || {})[`${f.k}_p`];
+                                  const s = (log.values || {})[`${f.k}_s`];
+                                  if ((p === undefined || p === '') && (s === undefined || s === '')) return null;
+                                  return (
+                                    <div key={f.k} className="grid grid-cols-12 gap-2 text-xs py-0.5">
+                                      <span className="col-span-6 text-slate-400">{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
+                                      <span className="col-span-3 text-white font-mono">{p || '—'}</span>
+                                      <span className="col-span-3 text-white font-mono">{s || '—'}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                          {log.notes && <p className="text-xs text-slate-300 mt-3 italic border-t border-slate-700/40 pt-2">{log.notes}</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Add-log modal */}
+          {tpl && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 overflow-y-auto" onClick={() => setActiveTemplate(null)}>
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-3xl my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className={`p-5 border-b border-slate-700 ${C.head} flex items-center justify-between`}>
+                  <div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${C.text}`}>New Site Data Log</span>
+                    <h3 className="text-lg font-bold text-white">{tpl.label}</h3>
+                  </div>
+                  <button onClick={() => setActiveTemplate(null)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white">
+                    <Icon name="X" className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-5 max-h-[70vh] overflow-y-auto scrollbar-thin">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-[10px] text-slate-400 mb-1 uppercase font-semibold">Site *</label>
+                      <select value={siteId} onChange={e => onSiteChange(e.target.value)}
+                        className={`w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 outline-none ${C.ring}`}>
+                        <option value="">— Select —</option>
+                        {SITES.map(s => <option key={s.id} value={s.id}>{s.name} ({s.call})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1 uppercase font-semibold">{tpl.idLabel}</label>
+                      <input type="text" value={idValue} onChange={e => setIdValue(e.target.value)}
+                        className={`w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 outline-none ${C.ring}`} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1 uppercase font-semibold">Date *</label>
+                      <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                        className={`w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 outline-none ${C.ring}`} />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1 uppercase font-semibold">Technician</label>
+                      <input type="text" value={tech} onChange={e => setTech(e.target.value)}
+                        className={`w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 outline-none ${C.ring}`} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-2 px-1 pb-1 mb-1 border-b border-slate-700 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="col-span-6">Test / Action</span>
+                    <span className="col-span-3">Primary</span>
+                    <span className="col-span-3">Secondary</span>
+                  </div>
+
+                  {tpl.sections.map((section, si) => (
+                    <div key={si} className="mb-4">
+                      <p className={`text-[11px] font-bold uppercase tracking-widest ${C.text} mt-3 mb-1.5`}>{section.title}</p>
+                      {section.fields.map(f => (
+                        <div key={f.k} className="grid grid-cols-12 gap-2 items-center py-0.5">
+                          <label className="col-span-6 text-xs text-slate-300">{f.label}{f.unit ? <span className="text-slate-500"> ({f.unit})</span> : null}</label>
+                          <input type="text" value={values[`${f.k}_p`] || ''} onChange={e => setVal(`${f.k}_p`, e.target.value)}
+                            className={`col-span-3 bg-slate-900 border border-slate-700 text-white text-xs rounded-md px-2 py-1.5 outline-none ${C.ring}`} />
+                          <input type="text" value={values[`${f.k}_s`] || ''} onChange={e => setVal(`${f.k}_s`, e.target.value)}
+                            className={`col-span-3 bg-slate-900 border border-slate-700 text-white text-xs rounded-md px-2 py-1.5 outline-none ${C.ring}`} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+
+                  <div className="mt-2">
+                    <label className="block text-[10px] text-slate-400 mb-1 uppercase font-semibold">Notes</label>
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} rows="2"
+                      className={`w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2.5 outline-none resize-none ${C.ring}`} />
+                  </div>
+                </div>
+                <div className="p-4 border-t border-slate-700 flex justify-end gap-2 bg-slate-800">
+                  <button onClick={() => setActiveTemplate(null)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">Cancel</button>
+                  <button onClick={save} disabled={saving}
+                    className="px-5 py-2 bg-noaa-blue hover:bg-noaa-light text-white rounded-lg text-sm font-bold disabled:opacity-50">
+                    {saving ? 'Saving…' : 'Save Data Log'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     const exportInspectionToPDF = (inspData) => {
       if (!inspData.siteId || !inspData.date) {
         alert('Cannot export: missing site or date');
@@ -2233,6 +2716,19 @@
         return () => unsubscribe();
       }, []);
 
+      const [statuses, setStatuses] = useState({});
+      useEffect(() => {
+        return db.collection('artifacts').doc(appId).collection('public').doc('site_status').onSnapshot(snap => {
+          setStatuses((snap.data() || {}).statuses || {});
+        });
+      }, []);
+      const getStatus = (id) => statuses[id] || 'ONLINE';
+      const operationalCount = SITES.filter(s => getStatus(s.id) === 'ONLINE').length;
+      const offlineCount = SITES.filter(s => getStatus(s.id) === 'OFFLINE').length;
+      const sitesLabel = offlineCount > 0
+        ? `${offlineCount} Offline`
+        : operationalCount < SITES.length ? 'Degraded' : 'Operational';
+
       const today = new Date().toLocaleDateString('en-CA');
       const scheduled = events.filter(e => !e.completed && e.date >= today).length;
       const pastDue = events.filter(e => !e.completed && e.date < today).length;
@@ -2253,7 +2749,7 @@
           <p className="text-xs text-slate-500">Last Updated: {lastUpdated}</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { t: 'Sites', v: '12', l: 'Operational', c: 'noaa-sky', i: 'Radio' },
+              { t: 'Sites', v: `${operationalCount}/${SITES.length}`, l: sitesLabel, c: offlineCount > 0 ? 'red' : operationalCount < SITES.length ? 'amber' : 'noaa-sky', i: 'Radio' },
               { t: 'Scheduled', v: String(scheduled), l: 'Upcoming', c: 'blue', i: 'Calendar' },
               { t: 'Past Due', v: String(pastDue), l: pastDue > 0 ? 'Action Needed' : 'None', c: pastDue > 0 ? 'red' : 'emerald', i: 'AlertTriangle' },
               { t: 'Completed', v: String(completed), l: 'This Period', c: 'emerald', i: 'CheckCircle' }
@@ -2802,6 +3298,7 @@
         </div>
         <InspectionsList onEdit={onEdit} />
         <MaintenanceLog />
+        <SiteDataLogs />
       </div>
     );
 
