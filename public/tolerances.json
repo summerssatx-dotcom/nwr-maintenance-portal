@@ -1,0 +1,800 @@
+{
+  "$meta": {
+    "title": "NWR PMI Out-of-Tolerance Config",
+    "generated": "2026-07-19",
+    "status": "DRAFT - pending user approval, not yet wired into the app",
+    "sources": {
+      "EHB7-CROWN": "EHB-7 Section 4.4, Crown Maintenance Schedule, 2/8/06 (CROWN/Crown Maintenance Schedule.pdf)",
+      "EHB7-NAUTEL": "EHB-7 Section 4.4, Nautel Maintenance Schedule, 6/4/13 (NAUTEL/NautelMaintSched.pdf)",
+      "EHB7-ARMSTRONG": "EHB-7 Section 4.4, Armstrong Maintenance Schedule, 7/27/16 (ARMSTRONG CLASSIC|G1000B/ArmstrongMaintSched.pdf; 8/2/16 rev: Maint Schedule-Both Armstrong TXs.pdf)",
+      "CROWN-UM": "Crown Weather Radio (User) Manual, Rev B (CROWN/CROWN User Manual.pdf)",
+      "NG1000-OM": "Nautel NG1000 Operations & Maintenance Manual, Issue 0.3 2010-06-11 (NAUTEL/NG1000 - Operations & Maintenance Manual.pdf)",
+      "ARM-CLASSIC-MAN": "Armstrong NWR System Manual (G100/G300/G1000) REV2 06/15/2003 (ARMSTRONG CLASSIC/Armstrong Classic - MANUAL.pdf)",
+      "ARM-G1000B-MAN": "Armstrong NWR G300B & G1000B System Manual REV 1 6/25/2010 (ARMSTRONG G1000B/Armstrong G1000B - MANUAL.pdf)"
+    },
+    "statusKey": {
+      "confirmed": "Value appears verbatim in the cited source (verified against rendered PDF page where extraction was ambiguous)",
+      "derived": "Not stated verbatim for this exact reading; borrowed or computed from a closely related spec in the cited source - REVIEW THESE",
+      "alarm": "Manufacturer protection/alarm threshold from the manual, not a PMI pass/fail tolerance - exceeding it means the hardware itself would fold back or trip; useful as a hard sanity limit",
+      "unknown": "No numeric tolerance found in the docs; EHB-7 says compare with previous readings (trend only). No flagging will be applied"
+    },
+    "checkTypes": {
+      "range": "flag if value < min or > max",
+      "nominal_pct": "flag if value outside nominal +/- pct%; nominal may be the literal number or the symbol 'licensedPowerW'",
+      "nearest_nominal_pct": "flag if value outside +/- pct% of the NEAREST value in allowedNominals (used for AC mains where site wiring varies)",
+      "pct_of_field": "flag if value > maxPct% of the referenced field's entered value (reflected vs forward)",
+      "agreement_pct": "flag if value differs from the referenced field's entered value by more than pct% (panel vs external wattmeter)",
+      "max": "flag if value > value",
+      "freq_error_hz": "flag if |entered MHz - site licensed frequency| > toleranceHz",
+      "spread_max_amps": "flag if (max - min) across the listed sibling fields exceeds warnAmps (soft) / alarmAmps (hard)",
+      "expect_yes": "flag if the yes/no radio is answered 'no'",
+      "max_age_years": "flag if the entered date is more than years old at inspection date"
+    },
+    "nearLimitRule": "Soft 'near limit' warning when a value is inside tolerance but past 80% of the distance from nominal (or range center) to the limit. Applied generically in Step 2 to every numeric check.",
+    "sourceDiscrepancies": [
+      "Armstrong Attachment E form {6} prints '(Within +/- 500 Hz)' but the procedure table (p. A-12 {6}) and on-site procedure (p. A-27) say +/-200 Hz; the annotated 7/27/16 copy strikes 500 and hand-corrects to '+/- 200 Hz'. Config uses +/-200 Hz.",
+      "Armstrong Attachment E form {7} asks 'Value is +/- 4.8 kHz on CRT?' while the procedure text (p. A-28 {7}) says nominal ~4.5 kHz, not to exceed 5 kHz. The app already renders 4.8 for Armstrong. Config keeps the yes/no checks as expect_yes and the hard 5.0 kHz cap; no numeric 4.8-vs-4.5 flagging is applied.",
+      "Crown carrier tolerance is +/-500 Hz per its schedule, looser than Nautel/Armstrong (+/-200 Hz). The app's step-4 note currently says 'Within +/-200 Hz' for all platforms - cosmetic fix in Step 2.",
+      "Crown 1kW PA1-8 balance: EHB-7 note recommends keeping the eight currents within 0.5-0.7 A of each other; the Crown manual (WR1000PA troubleshooting 5.2.8) uses >= 2.5 A difference as the troubleshoot threshold. Config warns at 0.7 A spread, hard-flags at 2.5 A."
+    ],
+    "unknowns": [
+      "Nautel PA Volts A/B: typically 27 V, operational range 7-53 V, power-dependent (NG1000-OM p. SD/power supply section) - no PMI tolerance; trend only",
+      "Nautel low-level rails +48/+15/-15/+5/+3.3/+1.8 VDC: rail names imply nominals but no +/- tolerance is published; trend only",
+      "Nautel PA1-8 / Preamp / IPA / Total PA currents: no numeric spec; trend only",
+      "Nautel Fan Tach 1-5 RPM: no spec; trend only",
+      "Nautel Active PA Power and IPA Fwd Power: IPA nominal 150 W (NG1000-OM 'last stage provides 150 W nominal as IPA output'); no tolerance; trend only",
+      "Crown 1kW (WA1000) PA Temp: no numeric spec found for the 1kW amp (the 35-50 C / 75 C figures are for the WR100/300 chassis); trend only",
+      "Crown 1kW ACC reading: no spec found (the 3.00-6.00 V ALC spec is for the WR100/300 panel); trend only",
+      "Crown 1kW In Ref (panel reflected): no numeric panel spec; the 4%-of-forward rule is stated for the external wattmeter; trend only",
+      "Crown 1kW exciter (100/300 panel) PA DC V/A while driving the WA1000 at ~50 W: the 35-50 V / 12-16 A specs assume full-power standalone operation; trend only in 1kW systems",
+      "Armstrong (both) external forward power as % of licensed power: Armstrong schedule states no number (Crown says +/-10%, Nautel +/-5%); only the panel-vs-external 5% agreement check is stated; ext fwd is left as derived +/-10% for review",
+      "Armstrong Classic FMX-80 exciter power nominal: not found; trend only",
+      "Armstrong Classic / G1000B PA voltage-current typical values: supply is nominally 50 VDC (AGC-controlled, varies with power); only alarm maxima are published; PA V flagged only as derived range around 50 V - review"
+    ]
+  },
+
+  "siteToPlatform": {
+    "AUS": "armstrongClassic",
+    "KER": "armstrongClassic",
+    "LLA": "armstrongClassic",
+    "DRT": "armstrongG1000B",
+    "LAG": "armstrongG1000B",
+    "CZO": "nautelNG1000",
+    "GNZ": "crown1000",
+    "SAT": "crown1000",
+    "SGN": "crown1000",
+    "UVA": "crown1000",
+    "DHS": "crown300",
+    "DIL": "crown300"
+  },
+
+  "platforms": {
+
+    "crown1000": {
+      "label": "Crown WRG1000 (1 kW dual)",
+      "licensedPowerW": 1000,
+      "txKeys": ["tx1", "tx2"],
+      "measurements": {
+        "acInput": {
+          "fields": ["ac1", "ac2"], "unit": "VAC",
+          "check": { "type": "nearest_nominal_pct", "allowedNominals": [115, 208, 220, 230], "pct": 10 },
+          "status": "confirmed", "source": "EHB7-CROWN {3} p. A-6: 115/208/220/230 VAC +/-10%"
+        },
+        "extForwardPower": {
+          "fields": ["{tx}_ext_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "confirmed", "source": "EHB7-CROWN {4}i p. A-7: corrective action if forward power exceeds +/-10% of normal operating power"
+        },
+        "extReflectedPower": {
+          "fields": ["{tx}_ext_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_ext_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "EHB7-CROWN {4}j p. A-7: corrective action if reflected > 4% of forward"
+        },
+        "fpExciterRfPower": {
+          "fields": ["{tx}_fp_rf"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "EHB7-CROWN {4}k: record and compare with previous (exciter/driver runs ~50 W drive in 1kW system, CROWN-UM WR1000PA 5.2.6)"
+        },
+        "fpExciterAntSwr": {
+          "fields": ["{tx}_fp_swr"], "unit": ":1",
+          "check": { "type": "max", "value": 3.0 },
+          "status": "alarm", "source": "CROWN-UM p. 3-7 h: SWR should be < 3.0:1; spec p. 1-3: auto-foldback at 3:1"
+        },
+        "fp1kwPowerOut": {
+          "fields": ["{tx}_fp_pwr"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "derived", "source": "Same quantity as external forward power; EHB-7 states +/-10% for the external meter reading only (EHB7-CROWN {4}i)"
+        },
+        "fp1kwPaTemp": {
+          "fields": ["{tx}_fp_temp"], "unit": "degC",
+          "check": null,
+          "status": "unknown", "source": "No numeric spec found for WA1000 PA temp; WR100/300 chassis figures (35-50 C at 25 C ambient, check at 75 C) are CROWN-UM 5.11.1.6"
+        },
+        "fp1kwInRef": {
+          "fields": ["{tx}_fp_inref"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "EHB7-CROWN {4}l: record and compare; 4%-of-forward rule is stated for the external wattmeter only"
+        },
+        "fp1kwSwr": {
+          "fields": ["{tx}_fp_1kw_swr"], "unit": ":1",
+          "check": { "type": "max", "value": 3.0 },
+          "status": "alarm", "source": "CROWN-UM spec p. 1-3: load-mismatch auto-foldback at 3:1 SWR"
+        },
+        "fp1kwAcc": {
+          "fields": ["{tx}_fp_acc"], "unit": "",
+          "check": null,
+          "status": "unknown", "source": "No WA1000 ACC spec found (WR100/300 ALC 3.00-6.00 V is CROWN-UM p. 3-7 c)"
+        },
+        "exciterPaDcVolts": {
+          "fields": ["{tx}_dc_v"], "unit": "V",
+          "check": null,
+          "status": "unknown", "source": "CROWN-UM p. 3-7 d: 35-50 V applies to standalone WR100/300 at full power; exciter in 1kW system runs reduced - trend only"
+        },
+        "exciterPaDcAmps": {
+          "fields": ["{tx}_dc_a"], "unit": "A",
+          "check": null,
+          "status": "unknown", "source": "CROWN-UM p. 3-7 e: 12-16 A (WR300) / 6-8 A (WR100) at full power; not valid at ~50 W drive - trend only"
+        },
+        "paVoltage1kw": {
+          "fields": ["{tx}_pa_v"], "unit": "V",
+          "check": { "type": "range", "min": 36, "max": 44 },
+          "status": "derived", "source": "CROWN-UM WR1000PA 5.2.6 p. 5-6: 'Supply voltage to the RF power amplifiers should be 40 volts' - no +/- given; +/-10% band proposed for review"
+        },
+        "paTotalCurrent1kw": {
+          "fields": ["{tx}_tot_a"], "unit": "A",
+          "check": { "type": "max", "value": 65 },
+          "status": "confirmed", "source": "CROWN-UM WR1000PA 5.2.7 p. 5-6: if total current over 65 A, take action"
+        },
+        "paIndividualCurrents": {
+          "fields": ["{tx}_pa1", "{tx}_pa2", "{tx}_pa3", "{tx}_pa4", "{tx}_pa5", "{tx}_pa6", "{tx}_pa7", "{tx}_pa8"], "unit": "A",
+          "check": { "type": "range", "min": 4, "max": 6, "softOnly": true },
+          "spreadCheck": { "type": "spread_max_amps", "warnAmps": 0.7, "alarmAmps": 2.5 },
+          "status": "confirmed", "source": "CROWN-UM WR1000PA 5.2.8 p. 5-6: 4-6 A typical, troubleshoot at >=2.5 A difference; EHB7-CROWN {5} note p. A-8: keep within 0.5-0.7 A of each other. 4-6 A range is 'typical' so it only soft-warns"
+        },
+        "carrierFrequency": {
+          "fields": ["freq_init_1", "freq_final_1", "freq_init_2", "freq_final_2"], "unit": "MHz",
+          "check": { "type": "freq_error_hz", "toleranceHz": 500 },
+          "status": "confirmed", "source": "EHB7-CROWN {6} p. A-8: within +/-500 Hz; exciter replacement if exceeded"
+        },
+        "voiceDeviationCrt": {
+          "fields": ["mod_crt_1", "mod_crt_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-CROWN {7} p. A-8: nominal ~4.5 kHz, must not exceed +/-5 kHz"
+        },
+        "voiceDeviationMeter": {
+          "fields": ["mod_meter_1", "mod_meter_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-CROWN {7} p. A-8"
+        },
+        "alertToneLevelDbm": {
+          "fields": ["audio1_alert_dbm", "audio2_alert_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -12, "max": -9 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e p. A-10: -9 to -12 dBm"
+        },
+        "alertToneLevelVrms": {
+          "fields": ["audio1_alert_vrms", "audio2_alert_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.195, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e p. A-10: 0.195 to 0.275 Vrms"
+        },
+        "alertToneModulation": {
+          "fields": ["audio1_alert_mod", "audio2_alert_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e(7) p. A-10: 4.5 kHz +/-0.5"
+        },
+        "sameHwLevelDbm": {
+          "fields": ["audio1_hw_dbm", "audio2_hw_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f p. A-10: -14.5 dBm +/-0.5"
+        },
+        "sameHwLevelVrms": {
+          "fields": ["audio1_hw_vrms", "audio2_hw_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f p. A-10: 0.146 +/-0.008 Vrms"
+        },
+        "sameHwModulation": {
+          "fields": ["audio1_hw_mod", "audio2_hw_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f(4) p. A-10: 4.5 kHz +/-0.5"
+        },
+        "sameCrsLevelDbm": {
+          "fields": ["audio1_crs_dbm", "audio2_crs_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g p. A-11: -14.5 dBm +/-0.5"
+        },
+        "sameCrsLevelVrms": {
+          "fields": ["audio1_crs_vrms", "audio2_crs_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g p. A-11: 0.146 +/-0.008 Vrms"
+        },
+        "sameCrsModulation": {
+          "fields": ["audio1_crs_mod", "audio2_crs_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g(4) p. A-11: 4.5 kHz +/-0.5"
+        },
+        "roamsBatteryAge": {
+          "fields": ["roamsDate"],
+          "check": { "type": "max_age_years", "years": 4 },
+          "status": "confirmed", "source": "EHB7-CROWN {3} p. A-6: replace ROAMS battery if over 4 years old"
+        }
+      }
+    },
+
+    "crown300": {
+      "label": "Crown WRG300 (300 W dual)",
+      "licensedPowerW": 300,
+      "txKeys": ["tx1", "tx2"],
+      "measurements": {
+        "acInput": {
+          "fields": ["ac1", "ac2"], "unit": "VAC",
+          "check": { "type": "nearest_nominal_pct", "allowedNominals": [115, 208, 220, 230], "pct": 10 },
+          "status": "confirmed", "source": "EHB7-CROWN {3} p. A-6"
+        },
+        "extForwardPower": {
+          "fields": ["{tx}_ext_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "confirmed", "source": "EHB7-CROWN {4}i p. A-7: +/-10% of normal operating power"
+        },
+        "extReflectedPower": {
+          "fields": ["{tx}_ext_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_ext_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "EHB7-CROWN {4}j p. A-7: reflected > 4% of forward -> corrective action"
+        },
+        "fpExciterRfPower": {
+          "fields": ["{tx}_fp_rf"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "derived", "source": "Same quantity as external forward power; EHB-7 states +/-10% for the external meter reading only (EHB7-CROWN {4}i,k)"
+        },
+        "fpExciterAntSwr": {
+          "fields": ["{tx}_fp_swr"], "unit": ":1",
+          "check": { "type": "max", "value": 3.0 },
+          "status": "alarm", "source": "CROWN-UM p. 3-7 h: SWR should be < 3.0:1; spec p. 1-3: auto-foldback at 3:1"
+        },
+        "exciterPaDcVolts": {
+          "fields": ["{tx}_dc_v"], "unit": "V",
+          "check": { "type": "range", "min": 35, "max": 50 },
+          "status": "confirmed", "source": "CROWN-UM p. 3-7 d: PA DC Volts should be 35-50 V (varies with antenna match, power, frequency); troubleshooting threshold 35-55 V (5.11.1.4)"
+        },
+        "exciterPaDcAmps": {
+          "fields": ["{tx}_dc_a"], "unit": "A",
+          "check": { "type": "range", "min": 12, "max": 16 },
+          "status": "confirmed", "source": "CROWN-UM p. 3-7 e and 5.11.1.5: PA DC Amperes 12-16 A for WR300"
+        },
+        "carrierFrequency": {
+          "fields": ["freq_init_1", "freq_final_1", "freq_init_2", "freq_final_2"], "unit": "MHz",
+          "check": { "type": "freq_error_hz", "toleranceHz": 500 },
+          "status": "confirmed", "source": "EHB7-CROWN {6} p. A-8: within +/-500 Hz"
+        },
+        "voiceDeviationCrt": {
+          "fields": ["mod_crt_1", "mod_crt_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-CROWN {7} p. A-8: nominal ~4.5 kHz, must not exceed +/-5 kHz"
+        },
+        "voiceDeviationMeter": {
+          "fields": ["mod_meter_1", "mod_meter_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-CROWN {7} p. A-8"
+        },
+        "alertToneLevelDbm": {
+          "fields": ["audio1_alert_dbm", "audio2_alert_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -12, "max": -9 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e p. A-10"
+        },
+        "alertToneLevelVrms": {
+          "fields": ["audio1_alert_vrms", "audio2_alert_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.195, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e p. A-10"
+        },
+        "alertToneModulation": {
+          "fields": ["audio1_alert_mod", "audio2_alert_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}e(7) p. A-10: 4.5 kHz +/-0.5"
+        },
+        "sameHwLevelDbm": {
+          "fields": ["audio1_hw_dbm", "audio2_hw_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f p. A-10"
+        },
+        "sameHwLevelVrms": {
+          "fields": ["audio1_hw_vrms", "audio2_hw_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f p. A-10"
+        },
+        "sameHwModulation": {
+          "fields": ["audio1_hw_mod", "audio2_hw_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}f(4) p. A-10"
+        },
+        "sameCrsLevelDbm": {
+          "fields": ["audio1_crs_dbm", "audio2_crs_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g p. A-11"
+        },
+        "sameCrsLevelVrms": {
+          "fields": ["audio1_crs_vrms", "audio2_crs_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g p. A-11"
+        },
+        "sameCrsModulation": {
+          "fields": ["audio1_crs_mod", "audio2_crs_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-CROWN {8}g(4) p. A-11"
+        },
+        "roamsBatteryAge": {
+          "fields": ["roamsDate"],
+          "check": { "type": "max_age_years", "years": 4 },
+          "status": "confirmed", "source": "EHB7-CROWN {3} p. A-6"
+        }
+      }
+    },
+
+    "nautelNG1000": {
+      "label": "Nautel NG1000 (1 kW dual)",
+      "licensedPowerW": 1000,
+      "txKeys": ["txa", "txb"],
+      "measurements": {
+        "acInput": {
+          "fields": ["ac1", "ac2"], "unit": "VAC",
+          "check": { "type": "nearest_nominal_pct", "allowedNominals": [115, 208, 230], "pct": 10 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {3} p. A-16: 115/208/230 VAC +/-10%"
+        },
+        "extForwardPower": {
+          "fields": ["{tx}_ext_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "confirmed", "source": "EHB7-NAUTEL Table A-2 p. A-4: forward power +/-10% of NTIA licensed power (remote check; on-site panel spec is tighter at +/-5%)"
+        },
+        "extReflectedPower": {
+          "fields": ["{tx}_ext_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_ext_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {4}10 p. A-17: reflected > 4% of forward -> corrective action"
+        },
+        "fpSystemForward": {
+          "fields": ["{tx}_fp_sys_fwd", "{tx}_pc_sys_fwd", "{tx}_fp_fwd", "{tx}_pc_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 5 },
+          "agreement": { "type": "agreement_pct", "field": "{tx}_ext_fwd", "pct": 5 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {4}10-11 p. A-17: panel forward within 5% of external wattmeter; outside +/-5% of normal operating power -> corrective action"
+        },
+        "fpSystemReflected": {
+          "fields": ["{tx}_fp_sys_refl", "{tx}_pc_sys_refl", "{tx}_fp_refl", "{tx}_pc_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_fp_sys_fwd", "maxPct": 4 },
+          "status": "derived", "source": "4%-of-forward rule stated for external wattmeter (EHB7-NAUTEL {4}10); equivalent to the confirmed VSWR < 1.5:1 limit"
+        },
+        "vswr": {
+          "fields": ["{tx}_fp_vswr", "{tx}_pc_vswr"], "unit": ":1",
+          "check": { "type": "max", "value": 1.5 },
+          "status": "confirmed", "source": "EHB7-NAUTEL Table A-2 p. A-4 and A.1.1(5) p. A-5: VSWR less than 1.5:1"
+        },
+        "activePaPower": {
+          "fields": ["{tx}_fp_active_pa", "{tx}_pc_active"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL Attachment E {4}: record and compare with previous"
+        },
+        "ipaForwardPower": {
+          "fields": ["{tx}_fp_ipa", "{tx}_pc_ipa"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "NG1000-OM (RF power block): IPA output 150 W nominal; no tolerance published - trend only"
+        },
+        "paCurrents": {
+          "fields": ["{tx}_pa1", "{tx}_pa2", "{tx}_pa3", "{tx}_pa4", "{tx}_pa5", "{tx}_pa6", "{tx}_pa7", "{tx}_pa8"], "unit": "A",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL {5} p. A-18: record and compare with previous; no numeric spec in schedule or NG1000-OM"
+        },
+        "preampCurrent": {
+          "fields": ["{tx}_preamp"], "unit": "A",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL Attachment E {5}: trend only"
+        },
+        "ipaCurrent": {
+          "fields": ["{tx}_ipa_cur"], "unit": "A",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL Attachment E {5}: trend only"
+        },
+        "totalPaCurrent": {
+          "fields": ["{tx}_tot_pa"], "unit": "A",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL Attachment E {5}: trend only"
+        },
+        "paVolts": {
+          "fields": ["{tx}_pa_v_a", "{tx}_pa_v_b"], "unit": "V",
+          "check": null,
+          "status": "unknown", "source": "NG1000-OM power supply section: typically 27 V, operational range 7-53 V, power-dependent - trend only"
+        },
+        "rail48": {
+          "fields": ["{tx}_48v"], "unit": "V",
+          "check": null, "nominal": 48,
+          "status": "unknown", "source": "NG1000-OM: regulated +48 V supply; no +/- tolerance published - trend only"
+        },
+        "rail15": {
+          "fields": ["{tx}_15v"], "unit": "V",
+          "check": null, "nominal": 15,
+          "status": "unknown", "source": "NG1000-OM: derived +15 V rail; no tolerance published"
+        },
+        "railNeg15": {
+          "fields": ["{tx}_n15v"], "unit": "V",
+          "check": null, "nominal": -15,
+          "status": "unknown", "source": "NG1000-OM: -15 V rail; no tolerance published"
+        },
+        "rail5": {
+          "fields": ["{tx}_5v"], "unit": "V",
+          "check": null, "nominal": 5,
+          "status": "unknown", "source": "NG1000-OM: +5 V rail; no tolerance published"
+        },
+        "rail3v3": {
+          "fields": ["{tx}_3v3"], "unit": "V",
+          "check": null, "nominal": 3.3,
+          "status": "unknown", "source": "NG1000-OM: +3.3 V rail; no tolerance published"
+        },
+        "rail1v8": {
+          "fields": ["{tx}_1v8"], "unit": "V",
+          "check": null, "nominal": 1.8,
+          "status": "unknown", "source": "NG1000-OM: +1.8 V rail; no tolerance published"
+        },
+        "fanTach": {
+          "fields": ["{tx}_fan1", "{tx}_fan2", "{tx}_fan3", "{tx}_fan4", "{tx}_fan5"], "unit": "RPM",
+          "check": null,
+          "status": "unknown", "source": "EHB7-NAUTEL Attachment E {5}: trend only"
+        },
+        "carrierFrequency": {
+          "fields": ["freq_init_1", "freq_final_1", "freq_init_2", "freq_final_2"], "unit": "MHz",
+          "check": { "type": "freq_error_hz", "toleranceHz": 200 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {6} p. A-11/A-18: within +/-200 Hz (corrective adjustment if > 500 Hz off)"
+        },
+        "voiceDeviationCrt": {
+          "fields": ["mod_crt_1", "mod_crt_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-NAUTEL {7} p. A-19: nominal ~4.5 kHz, must not exceed +/-5 kHz; remote Table A-3: deviation peak < 5.0 kHz"
+        },
+        "voiceDeviationMeter": {
+          "fields": ["mod_meter_1", "mod_meter_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-NAUTEL {7} p. A-19"
+        },
+        "srcCalLevelDbm": {
+          "fields": ["audio1_src_dbm", "audio2_src_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -11, "max": -9 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}a 14 p. A-21: -10 dBm injected; -9.0 to -11 dBm acceptable (0.218-0.275 V)"
+        },
+        "srcCalLevelVrms": {
+          "fields": ["audio1_src_vrms", "audio2_src_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.218, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}a 14 p. A-21: ~245 mV, at least 0.218-0.275 V"
+        },
+        "srcCalModulation": {
+          "fields": ["audio1_src_mod", "audio2_src_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.25, "max": 4.75 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}a 18 p. A-22: 4.5 kHz +/-0.25 (verified on rendered page; tighter than Crown/Armstrong +/-0.5)"
+        },
+        "alertToneLevelDbm": {
+          "fields": ["audio1_alert_dbm", "audio2_alert_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -12, "max": -9 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}b 6 p. A-23: -9 to -12 dBm"
+        },
+        "alertToneLevelVrms": {
+          "fields": ["audio1_alert_vrms", "audio2_alert_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.195, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}b 6 p. A-23"
+        },
+        "alertToneModulation": {
+          "fields": ["audio1_alert_mod", "audio2_alert_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.25, "max": 4.75 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}b 7 p. A-23: 4.5 kHz +/-0.25"
+        },
+        "sameHwLevelDbm": {
+          "fields": ["audio1_hw_dbm", "audio2_hw_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}c 3 p. A-23: -14.5 dBm +/-0.5"
+        },
+        "sameHwLevelVrms": {
+          "fields": ["audio1_hw_vrms", "audio2_hw_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}c 3 p. A-23: 0.146 +/-0.008"
+        },
+        "sameHwModulation": {
+          "fields": ["audio1_hw_mod", "audio2_hw_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.25, "max": 4.75 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}c 4 p. A-23: 4.5 kHz +/-0.25"
+        },
+        "sameCrsLevelDbm": {
+          "fields": ["audio1_crs_dbm", "audio2_crs_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}d 3 p. A-23: -14.5 dBm +/-0.5"
+        },
+        "sameCrsLevelVrms": {
+          "fields": ["audio1_crs_vrms", "audio2_crs_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}d 3 p. A-23"
+        },
+        "sameCrsModulation": {
+          "fields": ["audio1_crs_mod", "audio2_crs_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.25, "max": 4.75 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {8}d 4 p. A-23: 4.5 kHz +/-0.25"
+        },
+        "roamsBatteryAge": {
+          "fields": ["roamsDate"],
+          "check": { "type": "max_age_years", "years": 4 },
+          "status": "confirmed", "source": "EHB7-NAUTEL {3} p. A-16: replace ROAMS battery if over 4 years old"
+        }
+      }
+    },
+
+    "armstrongClassic": {
+      "label": "Armstrong G1000 Classic (1 kW dual, 3x FM-500LCD + combiner)",
+      "licensedPowerW": 1000,
+      "txKeys": ["tx1", "tx2"],
+      "measurements": {
+        "acInput": {
+          "fields": ["ac1", "ac2"], "unit": "VAC",
+          "check": { "type": "nearest_nominal_pct", "allowedNominals": [115, 208, 230], "pct": 10 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {3} p. A-24: 115/208/230 VAC +/-10% (manual alarm: standby when mains falls 20% below nominal, ARM-CLASSIC-MAN 7.5.3)"
+        },
+        "extForwardPower": {
+          "fields": ["{tx}_ext_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "derived", "source": "Armstrong schedule states no +/-% of licensed power (only 'authorized output power'); +/-10% borrowed from Crown/Nautel EHB-7 sections - REVIEW"
+        },
+        "extReflectedPower": {
+          "fields": ["{tx}_ext_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_ext_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {4}10 p. A-26: reflected > 4% of forward -> corrective action"
+        },
+        "fpExciterPower": {
+          "fields": ["{tx}_fp_exc_fwd", "{tx}_lp_exc"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "No FMX-80 exciter output spec found in schedule or ARM-CLASSIC-MAN; trend only (FM-500LCD input-power overload trips at 25 W, 7.5.2)"
+        },
+        "fpExciterReflected": {
+          "fields": ["{tx}_fp_exc_refl"], "unit": "W",
+          "check": null,
+          "status": "unknown", "source": "Trend only"
+        },
+        "fpCombinerForward": {
+          "fields": ["{tx}_fp_comb_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "agreement": { "type": "agreement_pct", "field": "{tx}_ext_fwd", "pct": 5 },
+          "status": "derived", "source": "Combiner display shows transmitter forward power for G1000 (ARM-CLASSIC-MAN 7.6.1); EHB7-ARMSTRONG {4}9 p. A-26: system forward power within 5% of external wattmeter; +/-10%-of-licensed borrowed - REVIEW"
+        },
+        "fpCombinerReflected": {
+          "fields": ["{tx}_fp_comb_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_fp_comb_fwd", "maxPct": 4 },
+          "status": "derived", "source": "4%-of-forward rule stated for external wattmeter (EHB7-ARMSTRONG {4}10); applied to combiner reading for review"
+        },
+        "fpPaForward": {
+          "fields": ["{tx}_fp_pa1_fwd", "{tx}_fp_pa2_fwd", "{tx}_fp_pa3_fwd", "{tx}_lp_pa1_fwd", "{tx}_lp_pa2_fwd", "{tx}_lp_pa3_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": 333, "pct": 10 },
+          "status": "derived", "source": "ARM-CLASSIC-MAN 7.6.1: each FM-500LCD set at 1/3 of total transmitter output for G1000 (~333 W); +/-10% band proposed for review - no tolerance published"
+        },
+        "fpPaReflected": {
+          "fields": ["{tx}_fp_pa1_refl", "{tx}_fp_pa2_refl", "{tx}_fp_pa3_refl"], "unit": "W",
+          "check": { "type": "max", "value": 125 },
+          "status": "alarm", "source": "ARM-CLASSIC-MAN 7.5.1: FM-500LCD folds back when reflected power reaches 125 W"
+        },
+        "lpSystemForward": {
+          "fields": ["{tx}_lp_sys_fwd", "{tx}_lp_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "agreement": { "type": "agreement_pct", "field": "{tx}_ext_fwd", "pct": 5 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {4}9 p. A-26: System Forward Power reading should be within 5% of the external wattmeter reading (agreement confirmed; +/-10%-of-licensed part is derived)"
+        },
+        "lpSystemReflected": {
+          "fields": ["{tx}_lp_sys_refl", "{tx}_lp_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_lp_sys_fwd", "maxPct": 4 },
+          "status": "derived", "source": "4%-of-forward rule from EHB7-ARMSTRONG {4}10 applied to laptop system reading; equivalent to remote-check VSWR 1.5:1 limit ({B} p. A-2)"
+        },
+        "paVoltage": {
+          "fields": ["{tx}_pa1_v", "{tx}_pa2_v", "{tx}_pa3_v"], "unit": "V",
+          "check": { "type": "range", "min": 45, "max": 55 },
+          "status": "derived", "source": "ARM-CLASSIC-MAN: 50 VDC switching supply per FM-500LCD (AGC-controlled, varies with output); +/-10% band proposed for review - no tolerance published"
+        },
+        "paCurrent": {
+          "fields": ["{tx}_pa1_a", "{tx}_pa2_a", "{tx}_pa3_a"], "unit": "A",
+          "check": { "type": "max", "value": 20 },
+          "status": "alarm", "source": "ARM-CLASSIC-MAN 7.5.2/4-x: foldback at current > 20 A; overload trip at 20 A (supply rated 20 A at 50 VDC)"
+        },
+        "carrierFrequency": {
+          "fields": ["freq_init_1", "freq_final_1", "freq_init_2", "freq_final_2"], "unit": "MHz",
+          "check": { "type": "freq_error_hz", "toleranceHz": 200 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {6} p. A-12/A-27: within +/-200 Hz (Attachment E form's '+/-500 Hz' is struck through and corrected to +/-200 Hz in the annotated copy; verified on rendered page E-3)"
+        },
+        "voiceDeviationCrt": {
+          "fields": ["mod_crt_1", "mod_crt_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {7} p. A-28: nominal ~4.5 kHz, must not exceed +/-5 kHz (form E-3 asks '4.8' - source discrepancy, see $meta)"
+        },
+        "voiceDeviationMeter": {
+          "fields": ["mod_meter_1", "mod_meter_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {7} p. A-28"
+        },
+        "srcCalLevelDbm": {
+          "fields": ["audio1_src_dbm", "audio2_src_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -11, "max": -9 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-31: -10 dBm injected; -9.0 to -11 dBm acceptable"
+        },
+        "srcCalLevelVrms": {
+          "fields": ["audio1_src_vrms", "audio2_src_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.218, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-31: ~245 mV (0.218-0.275 V)"
+        },
+        "srcCalModulation": {
+          "fields": ["audio1_src_mod", "audio2_src_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-32: 4.5 kHz +/-0.5"
+        },
+        "alertToneLevelDbm": {
+          "fields": ["audio1_alert_dbm", "audio2_alert_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -12, "max": -9 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 7 p. A-33: -9 to -12 dBm"
+        },
+        "alertToneLevelVrms": {
+          "fields": ["audio1_alert_vrms", "audio2_alert_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.195, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 7 p. A-33"
+        },
+        "alertToneModulation": {
+          "fields": ["audio1_alert_mod", "audio2_alert_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 8 p. A-33: 4.5 kHz +/-0.5"
+        },
+        "sameHwLevelDbm": {
+          "fields": ["audio1_hw_dbm", "audio2_hw_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33: -14.5 dBm +/-0.5"
+        },
+        "sameHwLevelVrms": {
+          "fields": ["audio1_hw_vrms", "audio2_hw_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33: 0.146 +/-0.008"
+        },
+        "sameHwModulation": {
+          "fields": ["audio1_hw_mod", "audio2_hw_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33: 4.5 kHz +/-0.5"
+        },
+        "sameCrsLevelDbm": {
+          "fields": ["audio1_crs_dbm", "audio2_crs_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34: -14.5 dBm +/-0.5"
+        },
+        "sameCrsLevelVrms": {
+          "fields": ["audio1_crs_vrms", "audio2_crs_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34"
+        },
+        "sameCrsModulation": {
+          "fields": ["audio1_crs_mod", "audio2_crs_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34: 4.5 kHz +/-0.5"
+        },
+        "roamsBatteryAge": {
+          "fields": ["roamsDate"],
+          "check": { "type": "max_age_years", "years": 4 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {3} p. A-24: replace ROAMS battery if over 4 years old"
+        }
+      }
+    },
+
+    "armstrongG1000B": {
+      "label": "Armstrong G1000B (1 kW dual, single NWR-TX1000 per TX)",
+      "licensedPowerW": 1000,
+      "txKeys": ["tx1", "tx2"],
+      "notes": "No separate FMX-80 exciter, no combiner, no PA2/PA3 - exciter is on the NWR-TX1000 board. Only ext fwd/rfl, the NWR-TX1000 panel fwd/rfl (app fields {tx}_vb_fp_*), Telecon system fwd/rfl ({tx}_vb_lp_sys_*), and one PA V/A pair ({tx}_vb_pa_*, {tx}_vb_lp_pa_*) apply.",
+      "measurements": {
+        "acInput": {
+          "fields": ["ac1", "ac2"], "unit": "VAC",
+          "check": { "type": "nearest_nominal_pct", "allowedNominals": [115, 208, 230], "pct": 10 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {3} p. A-24: 115/208/230 VAC +/-10%"
+        },
+        "extForwardPower": {
+          "fields": ["{tx}_ext_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "status": "derived", "source": "Armstrong schedule states no +/-% of licensed power; +/-10% borrowed from Crown/Nautel EHB-7 sections - REVIEW"
+        },
+        "extReflectedPower": {
+          "fields": ["{tx}_ext_refl"], "unit": "W",
+          "check": { "type": "pct_of_field", "field": "{tx}_ext_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {4}10 p. A-26: reflected > 4% of forward -> corrective action"
+        },
+        "panelForward": {
+          "fields": ["{tx}_vb_fp_fwd", "{tx}_vb_lp_sys_fwd"], "unit": "W",
+          "check": { "type": "nominal_pct", "nominal": "licensedPowerW", "pct": 10 },
+          "agreement": { "type": "agreement_pct", "field": "{tx}_ext_fwd", "pct": 5 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {4}9 p. A-26: system forward power within 5% of external wattmeter (agreement confirmed; +/-10%-of-licensed part derived). NWR-TX1000 panel Fwd/Rfl per {4}11 p. A-26"
+        },
+        "panelReflected": {
+          "fields": ["{tx}_vb_fp_refl", "{tx}_vb_lp_sys_refl"], "unit": "W",
+          "check": { "type": "max", "value": 250 },
+          "pmiCheck": { "type": "pct_of_field", "field": "{tx}_vb_fp_fwd", "maxPct": 4 },
+          "status": "confirmed", "source": "PMI: 4% of forward (EHB7-ARMSTRONG {4}10, derived for panel). Hard alarm: NWR-TX1000 folds back at reflected > 250 W / 3:1 (ARM-G1000B-MAN 7.5.3)"
+        },
+        "paVoltage": {
+          "fields": ["{tx}_vb_pa_v", "{tx}_vb_lp_pa_v"], "unit": "V",
+          "check": { "type": "range", "min": 45, "max": 55 },
+          "status": "derived", "source": "ARM-G1000B-MAN: PA supply nominally 50 VDC (AGC-controlled, rated 60 A); +/-10% band proposed for review - no tolerance published"
+        },
+        "paCurrent": {
+          "fields": ["{tx}_vb_pa_a", "{tx}_vb_lp_pa_a"], "unit": "A",
+          "check": { "type": "max", "value": 50 },
+          "status": "alarm", "source": "ARM-G1000B-MAN 7.5.3 / 4-27: foldback at PA current > 50 A for NWR-TX1000"
+        },
+        "carrierFrequency": {
+          "fields": ["freq_init_1", "freq_final_1", "freq_init_2", "freq_final_2"], "unit": "MHz",
+          "check": { "type": "freq_error_hz", "toleranceHz": 200 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {6} p. A-12/A-27: within +/-200 Hz"
+        },
+        "voiceDeviationCrt": {
+          "fields": ["mod_crt_1", "mod_crt_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {7} p. A-28: nominal ~4.5 kHz, must not exceed +/-5 kHz (form asks '4.8' - see $meta)"
+        },
+        "voiceDeviationMeter": {
+          "fields": ["mod_meter_1", "mod_meter_2"],
+          "check": { "type": "expect_yes" },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {7} p. A-28"
+        },
+        "srcCalLevelDbm": {
+          "fields": ["audio1_src_dbm", "audio2_src_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -11, "max": -9 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-31"
+        },
+        "srcCalLevelVrms": {
+          "fields": ["audio1_src_vrms", "audio2_src_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.218, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-31"
+        },
+        "srcCalModulation": {
+          "fields": ["audio1_src_mod", "audio2_src_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}a p. A-32: 4.5 kHz +/-0.5"
+        },
+        "alertToneLevelDbm": {
+          "fields": ["audio1_alert_dbm", "audio2_alert_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -12, "max": -9 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 7 p. A-33"
+        },
+        "alertToneLevelVrms": {
+          "fields": ["audio1_alert_vrms", "audio2_alert_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.195, "max": 0.275 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 7 p. A-33"
+        },
+        "alertToneModulation": {
+          "fields": ["audio1_alert_mod", "audio2_alert_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}b 8 p. A-33"
+        },
+        "sameHwLevelDbm": {
+          "fields": ["audio1_hw_dbm", "audio2_hw_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33"
+        },
+        "sameHwLevelVrms": {
+          "fields": ["audio1_hw_vrms", "audio2_hw_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33"
+        },
+        "sameHwModulation": {
+          "fields": ["audio1_hw_mod", "audio2_hw_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}c p. A-33"
+        },
+        "sameCrsLevelDbm": {
+          "fields": ["audio1_crs_dbm", "audio2_crs_dbm"], "unit": "dBm",
+          "check": { "type": "range", "min": -15.0, "max": -14.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34"
+        },
+        "sameCrsLevelVrms": {
+          "fields": ["audio1_crs_vrms", "audio2_crs_vrms"], "unit": "Vrms",
+          "check": { "type": "range", "min": 0.138, "max": 0.154 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34"
+        },
+        "sameCrsModulation": {
+          "fields": ["audio1_crs_mod", "audio2_crs_mod"], "unit": "kHz",
+          "check": { "type": "range", "min": 4.0, "max": 5.0 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {8}d p. A-34"
+        },
+        "roamsBatteryAge": {
+          "fields": ["roamsDate"],
+          "check": { "type": "max_age_years", "years": 4 },
+          "status": "confirmed", "source": "EHB7-ARMSTRONG {3} p. A-24"
+        }
+      }
+    }
+  }
+}

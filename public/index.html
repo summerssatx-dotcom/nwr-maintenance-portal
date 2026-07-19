@@ -62,7 +62,7 @@
   <div id="root"></div>
   
   <script type="text/babel">
-    const { useState, useEffect, useRef, Fragment } = React;
+    const { useState, useEffect, useRef, useMemo, useContext, createContext, Fragment } = React;
 
     // Firebase
     const firebaseConfig = {
@@ -77,6 +77,235 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
     const appId = 'nwr-maintenance-v2';
+
+    // ===== Out-of-tolerance evaluation =====
+    // Config lives in tolerances.json (deployed alongside this file). Every limit
+    // carries its EHB-7 / manual source and a status: confirmed | derived | alarm | unknown.
+    let TOLERANCES = null;
+    const tolerancesReady = fetch('tolerances.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(t => { TOLERANCES = t; return t; })
+      .catch(() => null);
+
+    const tolNum = (v) => {
+      if (v === null || v === undefined || String(v).trim() === '') return null;
+      const n = parseFloat(String(v).trim());
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const TOL_LABELS = {
+      tx1: 'TX1', tx2: 'TX2', txa: 'TX A', txb: 'TX B', ext: 'Ext Meter', fp: 'Panel', vb: 'TX1000',
+      lp: 'Laptop', pc: 'PC', fwd: 'Fwd', refl: 'Refl', rfl: 'Rfl', pwr: 'Pwr', rf: 'RF Pwr',
+      swr: 'SWR', vswr: 'VSWR', '1kw': '1kW', dbm: 'dBm', vrms: 'Vrms', dc: 'DC', pa: 'PA',
+      ipa: 'IPA', acc: 'ACC', exc: 'Exciter', comb: 'Combiner', sys: 'Sys', inref: 'In Ref',
+      temp: 'Temp', preamp: 'Preamp', cur: 'Cur', tot: 'Total', v: 'Volts', a: 'Amps',
+      '48v': '+48V', '15v': '+15V', n15v: '-15V', '5v': '+5V', '3v3': '+3.3V', '1v8': '+1.8V',
+      ac1: 'AC Input TX1', ac2: 'AC Input TX2', audio1: 'TX1 Audio', audio2: 'TX2 Audio',
+      alert: 'Alert Tone', hw: 'SAME H/W', crs: 'SAME CRS', src: 'Source', mod: 'Mod',
+      crt: 'CRT', meter: 'Meter', freq: 'Freq', init: 'Initial', final: 'Final',
+      roamsDate: 'ROAMS Battery Date', active: 'Active PA', fan1: 'Fan 1', fan2: 'Fan 2',
+      fan3: 'Fan 3', fan4: 'Fan 4', fan5: 'Fan 5',
+      pa1: 'PA1', pa2: 'PA2', pa3: 'PA3', pa4: 'PA4', pa5: 'PA5', pa6: 'PA6', pa7: 'PA7', pa8: 'PA8'
+    };
+    const tolFieldLabel = (field) =>
+      field.split('_').map(t => TOL_LABELS[t] || (t.charAt(0).toUpperCase() + t.slice(1))).join(' ');
+
+    // Soft "near limit" warning once a value is past this fraction of the way to a limit
+    const TOL_NEAR = 0.8;
+
+    const runTolCheck = (check, v, ctx) => {
+      const { platform, data, tx, site, unit, field } = ctx;
+      const fmt = (n) => String(+n.toFixed(2));
+      const u = unit || '';
+      switch (check.type) {
+        case 'range': {
+          const { min, max } = check;
+          const allowed = `${fmt(min)} to ${fmt(max)} ${u}`.trim();
+          if (v < min || v > max) return { severity: check.softOnly ? 'warn' : 'fail', allowed };
+          const center = (min + max) / 2, half = (max - min) / 2;
+          if (half > 0 && Math.abs(v - center) > TOL_NEAR * half) return { severity: 'warn', allowed, near: true };
+          return null;
+        }
+        case 'nominal_pct': {
+          const n = check.nominal === 'licensedPowerW' ? platform.licensedPowerW : check.nominal;
+          const devPct = Math.abs(v - n) / n * 100;
+          const allowed = `${fmt(n * (1 - check.pct / 100))} to ${fmt(n * (1 + check.pct / 100))} ${u} (${n} ±${check.pct}%)`;
+          if (devPct > check.pct) return { severity: 'fail', allowed };
+          if (devPct > TOL_NEAR * check.pct) return { severity: 'warn', allowed, near: true };
+          return null;
+        }
+        case 'nearest_nominal_pct': {
+          const n = check.allowedNominals.reduce((b, c) => (Math.abs(c - v) < Math.abs(b - v) ? c : b));
+          return runTolCheck({ type: 'nominal_pct', nominal: n, pct: check.pct }, v, ctx);
+        }
+        case 'pct_of_field': {
+          const ref = tolNum(data[check.field.replace('{tx}', tx)]);
+          if (ref === null || ref <= 0) return null;
+          const pct = (v / ref) * 100;
+          const allowed = `≤${check.maxPct}% of fwd (≤${fmt(ref * check.maxPct / 100)} ${u})`;
+          if (pct > check.maxPct) return { severity: 'fail', allowed };
+          if (pct > TOL_NEAR * check.maxPct) return { severity: 'warn', allowed, near: true };
+          return null;
+        }
+        case 'agreement_pct': {
+          const ref = tolNum(data[check.field.replace('{tx}', tx)]);
+          if (ref === null || ref <= 0) return null;
+          const diffPct = Math.abs(v - ref) / ref * 100;
+          const allowed = `within ${check.pct}% of ext meter (${fmt(ref)} ${u})`;
+          if (diffPct > check.pct) return { severity: 'fail', allowed };
+          if (diffPct > TOL_NEAR * check.pct) return { severity: 'warn', allowed, near: true };
+          return null;
+        }
+        case 'max': {
+          const allowed = `≤ ${fmt(check.value)} ${u}`.trim();
+          if (v > check.value) return { severity: 'fail', allowed };
+          if (v > TOL_NEAR * check.value) return { severity: 'warn', allowed, near: true };
+          return null;
+        }
+        case 'freq_error_hz': {
+          const nomMHz = site ? parseFloat(site.freq) : NaN;
+          if (!Number.isFinite(nomMHz)) return null;
+          const errHz = (v - nomMHz) * 1e6;
+          const allowed = `${nomMHz.toFixed(3)} MHz ±${check.toleranceHz} Hz`;
+          const valueNote = `${errHz >= 0 ? '+' : ''}${Math.round(errHz)} Hz`;
+          if (Math.abs(errHz) > check.toleranceHz) return { severity: 'fail', allowed, valueNote };
+          if (Math.abs(errHz) > TOL_NEAR * check.toleranceHz) return { severity: 'warn', allowed, valueNote, near: true };
+          return null;
+        }
+        case 'expect_yes': {
+          if (String(data[field]).toLowerCase() === 'no') return { severity: 'fail', allowed: 'Expected: Yes' };
+          return null;
+        }
+        case 'max_age_years': {
+          const d = new Date(String(data[field]));
+          if (isNaN(d.getTime())) return null;
+          const ref = data.date ? new Date(data.date) : new Date();
+          const age = (ref - d) / (365.25 * 24 * 3600 * 1000);
+          if (!(age >= 0)) return null;
+          const allowed = `≤ ${check.years} years old`;
+          const valueNote = `${age.toFixed(1)} yrs`;
+          if (age > check.years) return { severity: 'fail', allowed, valueNote };
+          if (age > TOL_NEAR * check.years) return { severity: 'warn', allowed, valueNote, near: true };
+          return null;
+        }
+        default:
+          return null;
+      }
+    };
+
+    // Returns an array of flag objects for the entry, or null if config/site unavailable
+    const evaluateTolerances = (data, siteId) => {
+      if (!TOLERANCES || !siteId) return null;
+      const platId = TOLERANCES.siteToPlatform[siteId];
+      const platform = platId && TOLERANCES.platforms[platId];
+      if (!platform) return null;
+      const site = SITES.find(s => s.id === siteId);
+      const NONNUMERIC = ['expect_yes', 'max_age_years'];
+      const flags = [];
+      Object.entries(platform.measurements).forEach(([mKey, m]) => {
+        const checks = [m.check, m.agreement, m.pmiCheck].filter(Boolean);
+        const txs = platform.txKeys;
+        const fieldList = [];
+        (m.fields || []).forEach(tpl => {
+          if (tpl.includes('{tx}')) txs.forEach(tx => fieldList.push({ field: tpl.replace('{tx}', tx), tx }));
+          else fieldList.push({ field: tpl, tx: txs[0] });
+        });
+        fieldList.forEach(({ field, tx }) => {
+          checks.forEach(check => {
+            const ctx = { platform, data, tx, site, unit: m.unit, field };
+            let res = null;
+            if (NONNUMERIC.includes(check.type)) {
+              if (data[field] === undefined || data[field] === null || data[field] === '') return;
+              res = runTolCheck(check, null, ctx);
+            } else {
+              const v = tolNum(data[field]);
+              if (v === null) return;
+              res = runTolCheck(check, v, ctx);
+            }
+            if (res) flags.push({
+              measurement: mKey, field,
+              label: tolFieldLabel(field),
+              value: String(data[field]) + (res.valueNote ? ` (${res.valueNote})` : ''),
+              unit: m.unit || '',
+              severity: res.severity, near: !!res.near,
+              allowed: res.allowed,
+              source: m.source || '', specStatus: m.status || ''
+            });
+          });
+        });
+        if (m.spreadCheck && m.fields) {
+          txs.forEach(tx => {
+            const vals = [];
+            m.fields.forEach(tpl => {
+              if (!tpl.includes('{tx}')) return;
+              const f = tpl.replace('{tx}', tx);
+              const v = tolNum(data[f]);
+              if (v !== null) vals.push({ f, v });
+            });
+            if (vals.length < 2) return;
+            const nums = vals.map(x => x.v);
+            const spread = Math.max(...nums) - Math.min(...nums);
+            const { warnAmps, alarmAmps } = m.spreadCheck;
+            const severity = spread > alarmAmps ? 'fail' : spread > warnAmps ? 'warn' : null;
+            if (severity) flags.push({
+              measurement: mKey + 'Spread',
+              field: vals.map(x => x.f).join(','),
+              fields: vals.map(x => x.f),
+              label: `${tx.toUpperCase()} PA current spread`,
+              value: `${+spread.toFixed(2)}`,
+              unit: 'A', severity, near: false,
+              allowed: `≤${warnAmps} A between PAs (troubleshoot at ≥${alarmAmps} A)`,
+              source: m.source || '', specStatus: m.status || ''
+            });
+          });
+        }
+      });
+      return flags;
+    };
+
+    // Field-level flag lookup for live form highlighting (fail wins over warn)
+    const ToleranceCtx = createContext(null);
+    const buildFlagsByField = (flags) => {
+      const map = {};
+      (flags || []).forEach(f => {
+        (f.fields || [f.field]).forEach(fd => {
+          if (!map[fd] || (f.severity === 'fail' && map[fd].severity !== 'fail')) map[fd] = f;
+        });
+      });
+      return map;
+    };
+
+    const ToleranceSummary = ({ flags, compact }) => {
+      if (!flags) return null;
+      if (!flags.length) return (
+        <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2">
+          <Icon name="CheckCircle" className="w-4 h-4 text-emerald-400" />
+          <p className="text-emerald-400 text-sm font-semibold">All entered readings are within tolerance.</p>
+        </div>
+      );
+      const order = { fail: 0, warn: 1 };
+      const sorted = [...flags].sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2));
+      return (
+        <div className={`${compact ? 'mt-2' : 'mt-4'} space-y-2`}>
+          {!compact && <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tolerance Check</h4>}
+          {sorted.map((f, i) => (
+            <div key={i} className={`p-3 rounded-xl border ${f.severity === 'fail' ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+              <div className="flex items-center justify-between flex-wrap gap-1">
+                <span className={`text-sm font-semibold ${f.severity === 'fail' ? 'text-red-400' : 'text-amber-400'}`}>
+                  {f.severity === 'fail' ? '⚠ Out of tolerance' : '△ Near limit'} — {f.label}
+                </span>
+                <span className="text-white text-sm font-mono">{f.value} {f.unit}</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1">
+                Allowed: {f.allowed}
+                {f.specStatus && f.specStatus !== 'confirmed' && <span className="text-slate-500"> · {f.specStatus === 'alarm' ? 'mfr alarm limit' : f.specStatus + ' spec'}</span>}
+              </p>
+              {f.source && <p className="text-[10px] text-slate-500 mt-0.5">{f.source}</p>}
+            </div>
+          ))}
+        </div>
+      );
+    };
 
 
     // Icons
@@ -498,20 +727,30 @@
       </div>
     );
 
-    const Input = ({ label, field, data, set, type = 'text', unit, small, classic }) => (
-      <div className={classic ? 'classic-field pl-2' : ''}>
-        <label className={`block text-slate-400 mb-1 ${small ? 'text-[10px]' : 'text-xs'} uppercase font-semibold`}>
-          {label} {unit && <span className="text-slate-600 normal-case">({unit})</span>}
-          {classic && <span className="text-amber-500 ml-1">*</span>}
-        </label>
-        <input
-          type={type}
-          value={data[field] || ''}
-          onChange={e => set(field, e.target.value)}
-          className={`w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg focus:border-noaa-sky outline-none ${small ? 'p-2 text-xs' : 'p-2.5 text-sm'}`}
-        />
-      </div>
-    );
+    const Input = ({ label, field, data, set, type = 'text', unit, small, classic }) => {
+      const tolMap = useContext(ToleranceCtx);
+      const tflag = tolMap ? tolMap[field] : null;
+      const border = tflag ? (tflag.severity === 'fail' ? 'border-red-500' : 'border-amber-400') : 'border-slate-700/50';
+      return (
+        <div className={classic ? 'classic-field pl-2' : ''}>
+          <label className={`block text-slate-400 mb-1 ${small ? 'text-[10px]' : 'text-xs'} uppercase font-semibold`}>
+            {label} {unit && <span className="text-slate-600 normal-case">({unit})</span>}
+            {classic && <span className="text-amber-500 ml-1">*</span>}
+          </label>
+          <input
+            type={type}
+            value={data[field] || ''}
+            onChange={e => set(field, e.target.value)}
+            className={`w-full bg-slate-900/80 border ${border} text-white rounded-lg focus:border-noaa-sky outline-none ${small ? 'p-2 text-xs' : 'p-2.5 text-sm'}`}
+          />
+          {tflag && (
+            <p className={`text-[10px] mt-1 leading-tight ${tflag.severity === 'fail' ? 'text-red-400' : 'text-amber-400'}`}>
+              {tflag.severity === 'fail' ? '⚠ Out of tol' : '△ Near limit'} — {tflag.allowed}
+            </p>
+          )}
+        </div>
+      );
+    };
 
     const Textarea = ({ label, field, data, set, rows = 3 }) => (
       <div>
@@ -525,10 +764,13 @@
       </div>
     );
 
-    const Radio = ({ label, field, data, set, options }) => (
-      <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+    const Radio = ({ label, field, data, set, options }) => {
+      const tolMap = useContext(ToleranceCtx);
+      const tflag = tolMap ? tolMap[field] : null;
+      return (
+      <div className={`p-3 bg-slate-900/50 rounded-lg border ${tflag ? 'border-red-500' : 'border-slate-700/50'}`}>
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className="text-sm text-slate-300">{label}</span>
+          <span className="text-sm text-slate-300">{label}{tflag && <span className="text-red-400 text-xs ml-2">⚠ {tflag.allowed}</span>}</span>
           <div className="flex gap-4">
             {options.map(o => (
               <label key={o.value} className="flex items-center gap-1.5 text-sm text-slate-400 cursor-pointer">
@@ -539,26 +781,40 @@
           </div>
         </div>
       </div>
-    );
+      );
+    };
 
-    const DualInput = ({ label, dbm, vrms, data, set }) => (
+    const DualInput = ({ label, dbm, vrms, data, set }) => {
+      const tolMap = useContext(ToleranceCtx);
+      const dbmFlag = tolMap ? tolMap[dbm] : null;
+      const vrmsFlag = tolMap ? tolMap[vrms] : null;
+      const cls = (f) => f ? (f.severity === 'fail' ? 'border-red-500' : 'border-amber-400') : 'border-slate-700/50';
+      const msg = (f) => f && (
+        <p className={`text-[10px] mt-0.5 leading-tight ${f.severity === 'fail' ? 'text-red-400' : 'text-amber-400'}`}>
+          {f.severity === 'fail' ? '⚠' : '△'} {f.allowed}
+        </p>
+      );
+      return (
       <div>
         <label className="block text-slate-400 mb-1 text-xs uppercase font-semibold">{label}</label>
         <div className="flex gap-2">
           <div className="flex-1">
             <input value={data[dbm] || ''} onChange={e => set(dbm, e.target.value)} placeholder="dBm"
-              className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
+              className={`w-full bg-slate-900/80 border ${cls(dbmFlag)} text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none`} />
             <span className="text-[10px] text-slate-500">dBm</span>
+            {msg(dbmFlag)}
           </div>
           <span className="text-slate-500 self-center text-xs">or</span>
           <div className="flex-1">
             <input value={data[vrms] || ''} onChange={e => set(vrms, e.target.value)} placeholder="Vrms"
-              className="w-full bg-slate-900/80 border border-slate-700/50 text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none" />
+              className={`w-full bg-slate-900/80 border ${cls(vrmsFlag)} text-white rounded-lg p-2 text-sm focus:border-noaa-sky outline-none`} />
             <span className="text-[10px] text-slate-500">Vrms</span>
+            {msg(vrmsFlag)}
           </div>
         </div>
       </div>
-    );
+      );
+    };
 
     // Main Form
     // Facility Maintenance Log (FAA 6030-1 style)
@@ -1498,6 +1754,34 @@
       const set = (f, v) => setData(p => ({ ...p, [f]: v }));
       const site = SITES.find(s => s.id === data.siteId);
 
+      // Live tolerance evaluation (config fetched once; evaluation re-runs as fields change)
+      const [tolLoaded, setTolLoaded] = useState(!!TOLERANCES);
+      useEffect(() => { tolerancesReady.then(t => { if (t) setTolLoaded(true); }); }, []);
+      const liveFlags = useMemo(
+        () => (tolLoaded && data.siteId ? evaluateTolerances(data, data.siteId) || [] : []),
+        [data, tolLoaded]
+      );
+      const flagsByField = useMemo(() => buildFlagsByField(liveFlags), [liveFlags]);
+      const liveFailCount = liveFlags.filter(f => f.severity === 'fail').length;
+      const liveWarnCount = liveFlags.filter(f => f.severity === 'warn').length;
+
+      // Evaluate readings and attach queryable flag results to a save payload
+      const withToleranceEval = async (payload) => {
+        const tol = TOLERANCES || await tolerancesReady;
+        const flags = tol ? (evaluateTolerances(payload, payload.siteId) || []) : null;
+        const failCount = flags ? flags.filter(f => f.severity === 'fail').length : 0;
+        const warnCount = flags ? flags.filter(f => f.severity === 'warn').length : 0;
+        return {
+          ...payload,
+          toleranceFlags: flags || [],
+          toleranceEvaluated: !!flags,
+          toleranceVersion: tol?.$meta?.generated || null,
+          flagCount: flags ? flags.length : 0,
+          failCount, warnCount,
+          hasFailures: failCount > 0
+        };
+      };
+
       const txCls = txType === 'nautel'
         ? { gradient: 'from-purple-900', activeBg: 'bg-purple-600', iconBg: 'bg-purple-500/20', iconText: 'text-purple-400', badgeBg: 'bg-purple-700', sectionText: 'text-purple-400' }
         : txType === 'crown'
@@ -1576,11 +1860,11 @@
         if (!data.siteId) return;
         setDraftSaving(true);
         try {
-          const payload = {
+          const payload = await withToleranceEval({
             ...data, txType, isClassic, isVerB, is1KW, status: 'draft',
             siteName: site?.name, siteCall: site?.call,
             timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
-          };
+          });
           if (docId) {
             await db.collection('artifacts').doc(appId).collection('public').doc('data')
               .collection('inspections').doc(docId).set(payload);
@@ -1598,11 +1882,11 @@
       const save = async () => {
         setSaving(true);
         try {
-          const payload = {
+          const payload = await withToleranceEval({
             ...data, txType, isClassic, isVerB, is1KW, status: 'completed',
             siteName: site?.name, siteCall: site?.call,
             timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
-          };
+          });
           if (docId) {
             await db.collection('artifacts').doc(appId).collection('public').doc('data')
               .collection('inspections').doc(docId).set(payload);
@@ -1610,7 +1894,11 @@
             await db.collection('artifacts').doc(appId).collection('public').doc('data')
               .collection('inspections').add(payload);
           }
-          alert('✓ Saved!');
+          alert(!payload.toleranceEvaluated
+            ? '✓ Saved! (tolerance config unavailable — readings were not evaluated)'
+            : payload.flagCount === 0
+              ? '✓ Saved! All entered readings within tolerance.'
+              : `✓ Saved with ${payload.failCount} out-of-tolerance and ${payload.warnCount} near-limit reading(s) flagged.`);
           setStep(1); setData({}); setTxType(null); setDocId(null); setDraft(null); setActiveTx('tx1'); setIsClassic(false); setIsVerB(false);
         } catch (e) { alert('Error: ' + e.message); }
         setSaving(false);
@@ -1937,7 +2225,7 @@
         const mod = txType === 'armstrong' ? '4.8' : '4.5';
         return (
           <div className="space-y-3 animate-in">
-            <Section title="Carrier Frequency Error" num="6" note="Within ±200 Hz" />
+            <Section title="Carrier Frequency Error" num="6" note={`Within ±${txType === 'crown' ? '500' : '200'} Hz`} />
             <div className="grid grid-cols-2 gap-3">
               <Input label={`Initial ${txLabel(1)}`} field="freq_init_1" data={data} set={set} unit="MHz" />
               <Input label={`Final ${txLabel(1)}`} field="freq_final_1" data={data} set={set} unit="MHz" />
@@ -2076,6 +2364,7 @@
       };
 
       return (
+        <ToleranceCtx.Provider value={flagsByField}>
         <div className="animate-in">
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden">
             <div className={`bg-gradient-to-r ${txCls.gradient} to-slate-900 p-5 border-b border-slate-700/50`}>
@@ -2103,9 +2392,19 @@
                 ))}
               </div>
             </div>
-            <div className="p-6 min-h-[65vh] max-h-[75vh] overflow-y-auto">{renderStep()}</div>
-            <div className="p-5 border-t border-slate-700/50 bg-slate-900/50 flex justify-between items-center">
+            <div className="p-6 min-h-[65vh] max-h-[75vh] overflow-y-auto">
+              {renderStep()}
+              {step === 7 && tolLoaded && data.siteId && <ToleranceSummary flags={liveFlags} />}
+              {step === 7 && !tolLoaded && <p className="mt-4 text-xs text-slate-500">Tolerance config unavailable — readings will be saved without evaluation.</p>}
+            </div>
+            <div className="p-5 border-t border-slate-700/50 bg-slate-900/50 flex justify-between items-center gap-3 flex-wrap">
               {step > 1 ? <button onClick={() => setStep(step - 1)} className="px-5 py-2 rounded-xl bg-slate-700 text-white font-medium">← Back</button> : <div />}
+              {liveFlags.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  {liveFailCount > 0 && <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-400 font-bold whitespace-nowrap">⚠ {liveFailCount} out of tol</span>}
+                  {liveWarnCount > 0 && <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold whitespace-nowrap">△ {liveWarnCount} near limit</span>}
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap justify-end">
                 <button onClick={handleSaveDraft} disabled={draftSaving || !data.siteId}
                   className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium text-sm disabled:opacity-40 flex items-center gap-2 transition-colors">
@@ -2130,6 +2429,7 @@
             </div>
           </div>
         </div>
+        </ToleranceCtx.Provider>
       );
     };
 
@@ -2874,6 +3174,7 @@
     // Analytics & Trend Analysis
     const Analytics = () => {
       const [inspections, setInspections] = useState([]);
+      const [expandedInsp, setExpandedInsp] = useState(null);
       const [logEntries, setLogEntries] = useState([]);
       const [loading, setLoading] = useState(true);
       const [timeRange, setTimeRange] = useState('30'); // days
@@ -2968,7 +3269,9 @@
         sites: [...new Set([...inspections.map(i => i.siteId), ...logEntries.map(l => l.siteId)])].length,
         avgFreqError: inspections.length > 0 ? 
           (inspections.reduce((sum, i) => sum + Math.abs(parseFloat(i.tx1_freq_error) || 0) + Math.abs(parseFloat(i.tx2_freq_error) || 0), 0) / (inspections.length * 2)).toFixed(1) : 0,
-        outOfSpec: inspections.filter(i => Math.abs(parseFloat(i.tx1_freq_error)) > 200 || Math.abs(parseFloat(i.tx2_freq_error)) > 200).length
+        outOfSpec: inspections.filter(i => Array.isArray(i.toleranceFlags)
+          ? i.toleranceFlags.some(f => f.severity === 'fail')
+          : (Math.abs(parseFloat(i.tx1_freq_error)) > 200 || Math.abs(parseFloat(i.tx2_freq_error)) > 200)).length
       };
 
       if (loading) {
@@ -3151,10 +3454,14 @@
                     {inspections.slice(0, 15).map(i => {
                       const freq1 = Math.abs(parseFloat(i.tx1_freq_error) || 0);
                       const freq2 = Math.abs(parseFloat(i.tx2_freq_error) || 0);
-                      const isSpec = freq1 <= 200 && freq2 <= 200;
-                      
+                      const flags = Array.isArray(i.toleranceFlags) && i.toleranceEvaluated ? i.toleranceFlags : null;
+                      const fails = flags ? flags.filter(f => f.severity === 'fail').length : 0;
+                      const warns = flags ? flags.filter(f => f.severity === 'warn').length : 0;
+                      const isSpec = flags ? fails === 0 : (freq1 <= 200 && freq2 <= 200);
+
                       return (
-                        <tr key={i.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <Fragment key={i.id}>
+                        <tr className="border-b border-slate-700/50 hover:bg-slate-700/30">
                           <td className="py-2 px-3 text-slate-300 font-mono text-xs">
                             {new Date(i.timestamp).toLocaleDateString()}
                           </td>
@@ -3171,7 +3478,14 @@
                             </span>
                           </td>
                           <td className="py-2 px-3 text-center">
-                            {isSpec ? (
+                            {flags ? (
+                              <button onClick={() => flags.length && setExpandedInsp(expandedInsp === i.id ? null : i.id)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${fails > 0 ? 'bg-red-500/20 text-red-400' : warns > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'} ${flags.length ? 'cursor-pointer' : 'cursor-default'}`}>
+                                <Icon name={fails > 0 || warns > 0 ? 'AlertTriangle' : 'CheckCircle'} className="w-3 h-3" />
+                                {fails > 0 ? `${fails} Out of Tol` : warns > 0 ? `${warns} Near Limit` : 'In Spec'}
+                                {flags.length > 0 && <Icon name={expandedInsp === i.id ? 'ChevronUp' : 'ChevronDown'} className="w-3 h-3" />}
+                              </button>
+                            ) : isSpec ? (
                               <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
                                 <Icon name="CheckCircle" className="w-3 h-3" /> In Spec
                               </span>
@@ -3182,6 +3496,14 @@
                             )}
                           </td>
                         </tr>
+                        {expandedInsp === i.id && flags && flags.length > 0 && (
+                          <tr className="border-b border-slate-700/50">
+                            <td colSpan={6} className="py-2 px-3 bg-slate-900/40">
+                              <ToleranceSummary flags={flags} compact />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -3249,6 +3571,7 @@
       const [inspections, setInspections] = useState([]);
       const [loading, setLoading] = useState(true);
       const [siteFilter, setSiteFilter] = useState('');
+      const [expandedTol, setExpandedTol] = useState(null);
 
       useEffect(() => {
         return db.collection('artifacts').doc(appId).collection('public').doc('data')
@@ -3316,7 +3639,11 @@
             <div className="p-8 text-center text-slate-500">No completed inspections for this site.</div>
           ) : (
             <div className="divide-y divide-slate-700/50">
-              {filtered.map(insp => (
+              {filtered.map(insp => {
+                const tolFlags = Array.isArray(insp.toleranceFlags) && insp.toleranceEvaluated ? insp.toleranceFlags : null;
+                const tolFails = tolFlags ? tolFlags.filter(f => f.severity === 'fail').length : 0;
+                const tolWarns = tolFlags ? tolFlags.filter(f => f.severity === 'warn').length : 0;
+                return (
                 <div key={insp.id} className="p-4 hover:bg-slate-700/20 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -3328,6 +3655,14 @@
                           insp.txType === 'crown' ? 'bg-teal-500/20 text-teal-400' :
                           'bg-blue-500/20 text-blue-400'
                         }`}>{insp.txType || 'unknown'}</span>
+                        {tolFlags && (
+                          <button onClick={() => tolFlags.length && setExpandedTol(expandedTol === insp.id ? null : insp.id)}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${tolFails > 0 ? 'bg-red-500/20 text-red-400' : tolWarns > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'} ${tolFlags.length ? 'cursor-pointer' : 'cursor-default'}`}>
+                            <Icon name={tolFails > 0 || tolWarns > 0 ? 'AlertTriangle' : 'CheckCircle'} className="w-3 h-3" />
+                            {tolFails > 0 ? `${tolFails} out of tol` : tolWarns > 0 ? `${tolWarns} near limit` : 'in spec'}
+                            {tolFlags.length > 0 && <Icon name={expandedTol === insp.id ? 'ChevronUp' : 'ChevronDown'} className="w-3 h-3" />}
+                          </button>
+                        )}
                       </div>
                       <p className="text-sm text-slate-400 mt-0.5">
                         {insp.date}{insp.tech ? ` · ${insp.tech}` : ''}
@@ -3349,8 +3684,12 @@
                       </button>
                     </div>
                   </div>
+                  {expandedTol === insp.id && tolFlags && tolFlags.length > 0 && (
+                    <ToleranceSummary flags={tolFlags} compact />
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
