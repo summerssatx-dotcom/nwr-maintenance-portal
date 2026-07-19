@@ -1188,7 +1188,7 @@
       const pageH = doc.internal.pageSize.getHeight();
       let y = 20;
       const site = SITES.find(s => s.id === inspData.siteId);
-      const { txType, isClassic, is1KW } = inspData;
+      const { txType, isClassic, isVerB, is1KW } = inspData;
 
       const checkPage = (h = 8) => {
         if (y + h > pageH - 20) { doc.addPage(); y = 20; }
@@ -1291,7 +1291,21 @@
           }
         }
 
-        if (txType === 'armstrong') {
+        if (txType === 'armstrong' && isVerB) {
+          addSubSection(`${lbl} — Front Panel (NWR-TX1000 · PWR)`);
+          addRow('Forward Power (W):', inspData[`${p}_vb_fp_fwd`]);
+          addRow('Reflected Power (W):', inspData[`${p}_vb_fp_refl`]);
+          addSubSection(`${lbl} — Laptop Interface (Telecon)`);
+          addRow('System Fwd Power (W):', inspData[`${p}_vb_lp_sys_fwd`]);
+          addRow('System Rfl Power (W):', inspData[`${p}_vb_lp_sys_refl`]);
+          addSubSection(`${lbl} — Exciter/PA Voltage & Current`);
+          addRow('PA Voltage (V):', inspData[`${p}_vb_pa_v`]);
+          addRow('PA Current (A):', inspData[`${p}_vb_pa_a`]);
+          addRow('PA Voltage — Laptop (V):', inspData[`${p}_vb_lp_pa_v`]);
+          addRow('PA Current — Laptop (A):', inspData[`${p}_vb_lp_pa_a`]);
+        }
+
+        if (txType === 'armstrong' && !isVerB) {
           addSubSection(`${lbl} — Front Panel Meter`);
           addRow('Exciter Fwd (W):', inspData[`${p}_fp_exc_fwd`]);
           addRow('Exciter Rfl (W):', inspData[`${p}_fp_exc_refl`]);
@@ -1472,6 +1486,7 @@
       const [step, setStep] = useState(1);
       const [txType, setTxType] = useState(null);
       const [isClassic, setIsClassic] = useState(false);
+      const [isVerB, setIsVerB] = useState(false);
       const [is1KW, setIs1KW] = useState(false);
       const [activeTx, setActiveTx] = useState('tx1');
       const [saving, setSaving] = useState(false);
@@ -1501,6 +1516,7 @@
         setData(d);
         if (d.txType) setTxType(d.txType);
         if (d.isClassic !== undefined) setIsClassic(d.isClassic);
+        if (d.isVerB !== undefined) setIsVerB(d.isVerB);
         if (d.is1KW !== undefined) setIs1KW(d.is1KW);
         setActiveTx(d.txType === 'nautel' ? 'txa' : 'tx1');
       };
@@ -1533,9 +1549,12 @@
         set('siteId', id);
         if (s) {
           const t = s.tx.toLowerCase();
-          if (t.includes('crown')) { setTxType('crown'); setIsClassic(false); setIs1KW(t.includes('1kw')); }
-          else if (t.includes('nautel')) { setTxType('nautel'); setIsClassic(false); setIs1KW(true); setActiveTx('txa'); }
-          else if (t.includes('armstrong')) { setTxType('armstrong'); setIsClassic(t.includes('classic')); setIs1KW(true); }
+          if (t.includes('crown')) { setTxType('crown'); setIsClassic(false); setIsVerB(false); setIs1KW(t.includes('1kw')); }
+          else if (t.includes('nautel')) { setTxType('nautel'); setIsClassic(false); setIsVerB(false); setIs1KW(true); setActiveTx('txa'); }
+          else if (t.includes('armstrong')) {
+            const verB = t.includes('armstrong b') || t.includes('g1000b') || t.includes('g300b');
+            setTxType('armstrong'); setIsClassic(t.includes('classic')); setIsVerB(verB); setIs1KW(true);
+          }
         }
       };
 
@@ -1558,7 +1577,7 @@
         setDraftSaving(true);
         try {
           const payload = {
-            ...data, txType, isClassic, is1KW, status: 'draft',
+            ...data, txType, isClassic, isVerB, is1KW, status: 'draft',
             siteName: site?.name, siteCall: site?.call,
             timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
           };
@@ -1580,7 +1599,7 @@
         setSaving(true);
         try {
           const payload = {
-            ...data, txType, isClassic, is1KW, status: 'completed',
+            ...data, txType, isClassic, isVerB, is1KW, status: 'completed',
             siteName: site?.name, siteCall: site?.call,
             timestamp: new Date().toISOString(), techId: user?.uid || 'anonymous'
           };
@@ -1592,7 +1611,7 @@
               .collection('inspections').add(payload);
           }
           alert('✓ Saved!');
-          setStep(1); setData({}); setTxType(null); setDocId(null); setDraft(null); setActiveTx('tx1');
+          setStep(1); setData({}); setTxType(null); setDocId(null); setDraft(null); setActiveTx('tx1'); setIsClassic(false); setIsVerB(false);
         } catch (e) { alert('Error: ' + e.message); }
         setSaving(false);
       };
@@ -1638,7 +1657,8 @@
                 <div><span className="text-slate-500">Call:</span> <span className="text-white font-mono">{site.call}</span></div>
                 <div><span className="text-slate-500">Freq:</span> <span className="text-white font-mono">{site.freq}</span></div>
               </div>
-              {isClassic && <p className="text-amber-400 text-xs mt-2">* Classic: PA2/PA3 & Combiner fields enabled</p>}
+              {isClassic && <p className="text-amber-400 text-xs mt-2">* Classic (Version A): Exciter, Combiner &amp; PA1–PA3 fields enabled</p>}
+              {isVerB && <p className="text-amber-400 text-xs mt-2">* G1000B (Version B): integrated NWR-TX1000 — single PWR &amp; PA readings (no combiner)</p>}
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
@@ -1692,7 +1712,42 @@
             </div>
           </div>
 
-          {txType === 'armstrong' && (
+          {txType === 'armstrong' && isVerB && (
+            <Fragment>
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel — NWR-TX1000 (PWR menu)</p>
+                <p className="text-[11px] text-slate-500 mb-2">Press ESC, then right-angle arrows until PWR → ENTER</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Fwd Pwr" field={`${p}_vb_fp_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Rfl Pwr" field={`${p}_vb_fp_refl`} data={data} set={set} unit="W" small />
+                </div>
+              </div>
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Laptop Interface (Telecon)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Sys Fwd" field={`${p}_vb_lp_sys_fwd`} data={data} set={set} unit="W" small />
+                  <Input label="Sys Rfl" field={`${p}_vb_lp_sys_refl`} data={data} set={set} unit="W" small />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Telecon System Fwd Pwr should be within 5% of external wattmeter.</p>
+              </div>
+              <Section title="Exciter/PA Currents and Voltages" num="5" />
+              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel (PA menu)</p>
+                <p className="text-[11px] text-slate-500 mb-2">Right-angle arrows until PA → ENTER</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="PA Voltage" field={`${p}_vb_pa_v`} data={data} set={set} unit="V" small />
+                  <Input label="PA Current" field={`${p}_vb_pa_a`} data={data} set={set} unit="A" small />
+                </div>
+                <p className="text-xs text-slate-400 font-bold uppercase mb-2 mt-3">Laptop Interface</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="PA Voltage" field={`${p}_vb_lp_pa_v`} data={data} set={set} unit="V" small />
+                  <Input label="PA Current" field={`${p}_vb_lp_pa_a`} data={data} set={set} unit="A" small />
+                </div>
+              </div>
+            </Fragment>
+          )}
+
+          {txType === 'armstrong' && !isVerB && (
             <Fragment>
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 <p className="text-xs text-slate-400 font-bold uppercase mb-2">Front Panel Meter</p>
@@ -2058,7 +2113,7 @@
                   {draftSaving ? 'Saving...' : 'Save Draft'}
                 </button>
                 {step === 7 && (
-                  <button onClick={() => exportInspectionToPDF({...data, txType, isClassic, is1KW, siteName: site?.name, siteCall: site?.call})}
+                  <button onClick={() => exportInspectionToPDF({...data, txType, isClassic, isVerB, is1KW, siteName: site?.name, siteCall: site?.call})}
                     className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-2 transition-colors">
                     <Icon name="FileDown" className="w-4 h-4" />
                     Export PDF
