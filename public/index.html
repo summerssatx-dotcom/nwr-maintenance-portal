@@ -543,8 +543,8 @@
       const statusColor = (status) => {
         switch(status) {
           case 'ordered': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-          case 'shipped': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
           case 'received': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+          case 'returned': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
           default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
         }
       };
@@ -604,7 +604,7 @@
                     {part.vendor && <span>• {part.vendor}</span>}
                   </div>
                   <div className="flex items-center gap-1">
-                    {['ordered', 'shipped', 'received'].map(status => (
+                    {['ordered', 'received', 'returned'].map(status => (
                       <button key={status} onClick={() => updateStatus(part.id, status)}
                         className={`flex-1 text-[9px] uppercase font-bold py-1 rounded border transition-all ${
                           part.status === status ? statusColor(status) : 'bg-slate-800 text-slate-600 border-slate-700 hover:border-slate-600'
