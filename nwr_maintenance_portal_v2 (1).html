@@ -2444,10 +2444,11 @@
           // Center on Texas
           const map = L.map(mapRef.current).setView([29.5, -98.5], 7);
 
-          // Add tile layer (CartoDB Voyager - medium tones, darkened via CSS)
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap contributors, © CARTO',
+          // Add tile layer (OpenStreetMap standard - keyless, darkened via CSS)
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
             className: 'map-tiles-dark',
+            maxZoom: 19,
             detectRetina: true
           }).addTo(map);
 
