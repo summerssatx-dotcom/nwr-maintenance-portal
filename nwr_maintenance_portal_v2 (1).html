@@ -821,7 +821,8 @@
     const MaintenanceLog = () => {
       const [entries, setEntries] = useState([]);
       const [showAdd, setShowAdd] = useState(false);
-      const [newEntry, setNewEntry] = useState({ siteId: '', time: '', remarks: '', initials: '' });
+      const [siteFilter, setSiteFilter] = useState('');
+      const [newEntry, setNewEntry] = useState({ time: '', remarks: '', initials: '' });
 
       useEffect(() => {
         return db.collection('maintenance_log').orderBy('timestamp', 'desc').onSnapshot(
@@ -840,20 +841,20 @@
       }, [showAdd]);
 
       const addEntry = async () => {
-        if (!newEntry.siteId || !newEntry.time || !newEntry.remarks || !newEntry.initials) return;
+        if (!siteFilter || !newEntry.time || !newEntry.remarks || !newEntry.initials) return;
         const now = new Date();
-        const site = SITES.find(s => s.id === newEntry.siteId);
+        const site = SITES.find(s => s.id === siteFilter);
         await db.collection('maintenance_log').add({
           date: now.toISOString().split('T')[0],
           time: newEntry.time,
-          siteId: newEntry.siteId,
-          siteName: site?.name || newEntry.siteId,
+          siteId: siteFilter,
+          siteName: site?.name || siteFilter,
           siteCall: site?.call || '',
           remarks: newEntry.remarks,
           initials: newEntry.initials.toUpperCase(),
           timestamp: now.toISOString()
         });
-        setNewEntry({ siteId: '', time: '', remarks: '', initials: '' });
+        setNewEntry({ time: '', remarks: '', initials: '' });
         setShowAdd(false);
       };
 
@@ -861,30 +862,50 @@
         if (confirm('Delete this log entry?')) db.collection('maintenance_log').doc(id).delete();
       };
 
+      const filtered = siteFilter ? entries.filter(e => e.siteId === siteFilter) : [];
+      const selectedSite = SITES.find(s => s.id === siteFilter);
+
       return (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl overflow-hidden h-full flex flex-col">
           <div className="bg-gradient-to-r from-slate-700 to-slate-900 p-5 border-b border-slate-700/50">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-slate-600/50 flex items-center justify-center">
                   <Icon name="FileText" className="w-5 h-5 text-slate-300" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">Facility Maintenance Log</h2>
+                  <p className="text-xs text-slate-400">
+                    {siteFilter ? `${filtered.length} entr${filtered.length !== 1 ? 'ies' : 'y'} · ${selectedSite?.name || siteFilter}` : 'Select a site to view its log'}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowAdd(!showAdd)}
-                className="p-2 hover:bg-slate-600 rounded-lg text-slate-300 hover:text-white transition-colors">
-                <Icon name={showAdd ? "X" : "Plus"} className="w-5 h-5" />
-              </button>
-            </div>
-            {showAdd && (
-              <div className="mt-4 p-4 bg-slate-900/50 rounded-xl border border-slate-600 space-y-3 animate-in">
-                <select value={newEntry.siteId} onChange={e => setNewEntry({...newEntry, siteId: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-noaa-sky">
-                  <option value="">— Select Site —</option>
-                  {SITES.map(s => <option key={s.id} value={s.id}>{s.name} ({s.call})</option>)}
+              <div className="flex items-center gap-2">
+                <select
+                  value={siteFilter}
+                  onChange={e => { setSiteFilter(e.target.value); if (!e.target.value) setShowAdd(false); }}
+                  className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-noaa-sky"
+                >
+                  <option value="">— Select a Site —</option>
+                  {SITES.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {s.call} ({entries.filter(e => e.siteId === s.id).length})
+                    </option>
+                  ))}
                 </select>
+                <button onClick={() => setShowAdd(!showAdd)} disabled={!siteFilter}
+                  title={siteFilter ? 'Add entry' : 'Select a site first'}
+                  className="p-2 hover:bg-slate-600 rounded-lg text-slate-300 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent">
+                  <Icon name={showAdd ? "X" : "Plus"} className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            {showAdd && siteFilter && (
+              <div className="mt-4 p-4 bg-slate-900/50 rounded-xl border border-slate-600 space-y-3 animate-in">
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <Icon name="MapPin" className="w-3.5 h-3.5 text-noaa-sky" />
+                  <span>Logging to <span className="text-white font-semibold">{selectedSite?.name || siteFilter}</span>{selectedSite?.call ? ` (${selectedSite.call})` : ''}</span>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-slate-400 mb-1 uppercase font-semibold">Time (24-hour)</label>
@@ -908,7 +929,14 @@
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
-            {entries.length > 0 ? (
+            {!siteFilter ? (
+              <div className="flex-1 flex items-center justify-center text-center p-8">
+                <div className="flex flex-col items-center gap-2">
+                  <Icon name="MousePointerClick" className="w-6 h-6 text-slate-600" />
+                  <p className="text-slate-500 text-sm">Select a site from the dropdown to view its log entries.</p>
+                </div>
+              </div>
+            ) : filtered.length > 0 ? (
               <>
                 <div className="bg-slate-900/50 border-b border-slate-700/50 p-2 grid grid-cols-12 gap-2 text-xs font-bold text-slate-400 uppercase">
                   <div className="col-span-2">Date</div>
@@ -918,7 +946,7 @@
                   <div className="col-span-1 text-center">Init</div>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-thin">
-                  {entries.map(entry => (
+                  {filtered.map(entry => (
                     <div key={entry.id} className="p-2 border-b border-slate-700/30 hover:bg-slate-900/30 transition-colors grid grid-cols-12 gap-2 text-sm group">
                       <div className="col-span-2 text-slate-400 font-mono text-xs">
                         {new Date(entry.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
@@ -944,8 +972,8 @@
               <div className="flex-1 flex items-center justify-center text-center p-8">
                 <div>
                   <Icon name="FileText" className="w-12 h-12 mx-auto mb-3 text-slate-600 opacity-30" />
-                  <p className="text-slate-500 text-sm">No log entries</p>
-                  <p className="text-slate-600 text-xs mt-1">Click + to add first entry</p>
+                  <p className="text-slate-500 text-sm">No log entries for {selectedSite?.name || 'this site'}</p>
+                  <p className="text-slate-600 text-xs mt-1">Click + to add the first entry</p>
                 </div>
               </div>
             )}
