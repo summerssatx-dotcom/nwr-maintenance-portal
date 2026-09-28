@@ -1777,7 +1777,7 @@
       const [draftSaving, setDraftSaving] = useState(false);
       const [data, setData] = useState({});
       const [docId, setDocId] = useState(null);
-      const [draft, setDraft] = useState(null);
+      const [drafts, setDrafts] = useState([]);
 
       const set = (f, v) => setData(p => ({ ...p, [f]: v }));
       const site = SITES.find(s => s.id === data.siteId);
@@ -1841,19 +1841,20 @@
       }, [editDoc]);
 
       useEffect(() => {
+        // Single-field equality query — no composite index required. (A
+        // where(status)+orderBy(timestamp) query needs a composite index that
+        // was never created, so it failed and drafts were unreachable.)
         db.collection('artifacts').doc(appId).collection('public').doc('data')
           .collection('inspections')
           .where('status', '==', 'draft')
-          .orderBy('timestamp', 'desc')
-          .limit(1)
           .get()
           .then(snap => {
-            if (!snap.empty) {
-              const d = snap.docs[0];
-              setDraft({ id: d.id, data: d.data() });
-            }
+            const list = snap.docs
+              .map(d => ({ id: d.id, data: d.data() }))
+              .sort((a, b) => (b.data.timestamp || '').localeCompare(a.data.timestamp || ''));
+            setDrafts(list);
           })
-          .catch(() => {});
+          .catch(err => console.error('Draft load error:', err));
       }, []);
 
       const handleSiteChange = (id) => {
@@ -1870,18 +1871,18 @@
         }
       };
 
-      const resumeDraft = () => {
-        initFromData(draft.data);
-        setDocId(draft.id);
-        setDraft(null);
+      const resumeDraft = (d) => {
+        initFromData(d.data);
+        setDocId(d.id);
+        setDrafts([]);
       };
 
-      const discardDraft = () => {
-        if (draft?.id) {
+      const discardDraft = (d) => {
+        if (d?.id) {
           db.collection('artifacts').doc(appId).collection('public').doc('data')
-            .collection('inspections').doc(draft.id).delete().catch(() => {});
+            .collection('inspections').doc(d.id).delete().catch(() => {});
         }
-        setDraft(null);
+        setDrafts(prev => prev.filter(x => x.id !== d.id));
       };
 
       const handleSaveDraft = async () => {
@@ -1927,7 +1928,7 @@
             : payload.flagCount === 0
               ? '✓ Saved! All entered readings within tolerance.'
               : `✓ Saved with ${payload.failCount} out-of-tolerance and ${payload.warnCount} near-limit reading(s) flagged.`);
-          setStep(1); setData({}); setTxType(null); setDocId(null); setDraft(null); setActiveTx('tx1'); setIsClassic(false); setIsVerB(false);
+          setStep(1); setData({}); setTxType(null); setDocId(null); setDrafts([]); setActiveTx('tx1'); setIsClassic(false); setIsVerB(false);
         } catch (e) { alert('Error: ' + e.message); }
         setSaving(false);
       };
@@ -1943,13 +1944,25 @@
       // Step 1: Site
       const Step1 = () => (
         <div className="space-y-4 animate-in">
-          {draft && !docId && (
+          {drafts.length > 0 && !docId && (
             <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-              <p className="text-amber-400 font-semibold text-sm">Unsaved Draft Found</p>
-              <p className="text-slate-400 text-xs mt-1">{draft.data.siteName || draft.data.siteId || 'Unknown site'} · {draft.data.date || 'no date'}</p>
-              <div className="flex gap-2 mt-3">
-                <button onClick={resumeDraft} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs font-semibold transition-colors">Resume Draft</button>
-                <button onClick={discardDraft} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors">Discard</button>
+              <p className="text-amber-400 font-semibold text-sm">
+                {drafts.length === 1 ? 'Unsaved Draft Found' : `${drafts.length} Unsaved Drafts Found`}
+              </p>
+              <div className="mt-2 space-y-2">
+                {drafts.map(d => (
+                  <div key={d.id} className="flex items-center justify-between gap-3 flex-wrap bg-slate-900/40 rounded-lg px-3 py-2">
+                    <p className="text-slate-300 text-xs min-w-0">
+                      <span className="font-semibold text-white">{d.data.siteName || d.data.siteId || 'Unknown site'}</span>
+                      <span className="text-slate-500"> · {d.data.date || 'no date'}</span>
+                      {d.data.timestamp && <span className="text-slate-600 ml-2">saved {new Date(d.data.timestamp).toLocaleString()}</span>}
+                    </p>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => resumeDraft(d)} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs font-semibold transition-colors">Resume</button>
+                      <button onClick={() => discardDraft(d)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors">Discard</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
