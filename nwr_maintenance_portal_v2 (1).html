@@ -327,6 +327,7 @@
       { 
         id: 'AUS', name: "Austin", freq: "162.400 MHz", call: "WKX27", tx: "Armstrong Classic 1KW", 
         lat: "30.3220", lng: "-97.8035",
+        county: "Travis", fips: "48453",
         address: "2477 Waymaker Way, Austin, TX 78746",
         building: "KVUE Austin",
         poc: "Arnold Lopez",
@@ -339,6 +340,7 @@
       { 
         id: 'CZO', name: "Carrizo Springs", freq: "162.550 MHz", call: "WNG692", tx: "Nautel 1KW", 
         lat: "28.5208", lng: "-99.8819",
+        county: "Dimmit", fips: "48127",
         address: "3204 Valley St, Carrizo Springs, TX 78834",
         building: "Rio Grande Electric",
         poc: "Office Staff",
@@ -348,6 +350,7 @@
       { 
         id: 'DHS', name: "D'Hanis", freq: "162.525 MHz", call: "WNG600", tx: "Crown 300W", 
         lat: "29.3208", lng: "-99.3319",
+        county: "Medina", fips: "48325",
         address: "Pvt Rd 5120, D'Hanis, TX 78850",
         building: "Medina Electric Site",
         lockboxCode: "6&2-9&0",
@@ -356,6 +359,7 @@
       { 
         id: 'DRT', name: "Del Rio", freq: "162.400 MHz", call: "WXJ98", tx: "Armstrong B 1KW", 
         lat: "29.4686", lng: "-101.0141",
+        county: "Val Verde", fips: "48465",
         address: "Diablo East Rd, Del Rio, TX 78840",
         building: "National Park Services",
         poc: "Chief Ranger",
@@ -367,6 +371,7 @@
       { 
         id: 'DIL', name: "Dilley", freq: "162.500 MHz", call: "WNG523", tx: "Crown 300W", 
         lat: "28.6752", lng: "-99.1886",
+        county: "Frio", fips: "48163",
         address: "515 Co Rd 4670, Dilley, TX 78017",
         building: "Medina Electric Site",
         lockboxCode: "6&2-9&0",
@@ -376,6 +381,7 @@
       { 
         id: 'GNZ', name: "Gonzales", freq: "162.525 MHz", call: "KXI56", tx: "Crown 1KW", 
         lat: "29.5466", lng: "-97.4066",
+        county: "Gonzales", fips: "48177",
         address: "586 Co Rd 482, Gonzales, TX 78629",
         building: "LCRA Site",
         poc: "LCRA",
@@ -386,6 +392,7 @@
       { 
         id: 'KER', name: "Kerrville", freq: "162.450 MHz", call: "WWF90", tx: "Nautel NG1000",
         lat: "30.0094", lng: "-99.2625",
+        county: "Kerr", fips: "48265",
         address: "280 Doyle Rd, Kerrville, TX 78028",
         building: "LCRA Site",
         lockboxCode: "6&2-9&0",
@@ -394,6 +401,7 @@
       { 
         id: 'LAG', name: "LaGrange", freq: "162.500 MHz", call: "WWG55", tx: "Armstrong B 1KW", 
         lat: "29.9511", lng: "-96.7744",
+        county: "Fayette", fips: "48149",
         address: "7440 Hardcastle Ln, La Grange, TX 78945",
         building: "LCRA Site",
         lockboxCode: "6&2-9&0",
@@ -402,6 +410,7 @@
       { 
         id: 'LLA', name: "Llano", freq: "162.425 MHz", call: "WWF91", tx: "Armstrong Classic 1KW", 
         lat: "30.6002", lng: "-98.6238",
+        county: "Llano", fips: "48299",
         address: "611 Silver Spgs Rnch Rd, Llano, TX 78643",
         building: "LCRA Site",
         lockboxCode: "6&2-9&0",
@@ -410,6 +419,7 @@
       { 
         id: 'SAT', name: "San Antonio", freq: "162.550 MHz", call: "WXK67", tx: "Crown 1KW", 
         lat: "29.6850", lng: "-98.4497",
+        county: "Bexar", fips: "48029",
         address: "25870 US-281, San Antonio, TX 78258",
         building: "American Tower Site",
         gateCode: "2055 (Vehicle Gate & Shelter)",
@@ -418,6 +428,7 @@
       { 
         id: 'SGN', name: "Seguin", freq: "162.475 MHz", call: "WNG641", tx: "Crown 1KW", 
         lat: "29.6547", lng: "-97.8241",
+        county: "Guadalupe", fips: "48187",
         address: "500 Prairie-Lea Rd, Kingsbury, TX 78638",
         building: "LCRA Site",
         poc: "LCRA",
@@ -428,6 +439,7 @@
       { 
         id: 'UVA', name: "Uvalde", freq: "162.425 MHz", call: "KWN51", tx: "Crown 1KW", 
         lat: "29.2356", lng: "-99.7854",
+        county: "Uvalde", fips: "48463",
         address: "188 Private Rd 2035, Uvalde, TX 78801",
         building: "Medina Electric Site",
         gateCode: "4568",
@@ -3907,6 +3919,12 @@
                     <span className="text-slate-500">Coordinates</span>
                     <span className="text-slate-300 font-mono text-xs">{s.lat}, {s.lng}</span>
                   </div>
+                  {s.fips && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">FIPS</span>
+                      <span className="text-slate-300 text-xs"><span className="text-white font-mono">{s.fips}</span> · {s.county} Co.</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-500">Status</span>
                     <span className={`text-xs font-medium ${statusCls}`}>● {statusLabel}</span>
